@@ -85,4 +85,44 @@ except Exception:  # noqa: BLE001 - reported through the fallback app below
         await send({"type": "http.response.body", "body": body})
 
 
+# ---------------------------------------------------------------------------
+# Path probe.
+#
+# Routing on a serverless host is the one thing that cannot be tested from a
+# laptop, and when it is wrong every route returns 404 with nothing to say why.
+# Adding ?__whoami=1 to any URL reports the path this app was actually handed,
+# which is the single fact needed to tell "wrong routing" from "wrong app".
+#
+# Deliberately narrow: the request path and nothing else. No headers, no
+# environment, so it cannot leak a token or a connection string.
+# ---------------------------------------------------------------------------
+_application = app
+
+
+async def app(scope, receive, send):  # type: ignore[misc]
+    if scope["type"] == "http" and b"__whoami" in scope.get("query_string", b""):
+        body = (
+            f"path       : {scope.get('path')}\n"
+            f"root_path  : {scope.get('root_path', '')}\n"
+            f"query      : {scope.get('query_string', b'').decode('utf-8', 'replace')}\n"
+            "\n"
+            "If 'path' is not the URL you requested, the host is rewriting it\n"
+            "and no route can match. See the routing note in vercel.json.\n"
+        ).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", b"text/plain; charset=utf-8"),
+                    (b"cache-control", b"no-store"),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
+        return
+
+    await _application(scope, receive, send)
+
+
 __all__ = ["app"]

@@ -1,18 +1,33 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "//": [
+    "`routes` rather than `rewrites`, deliberately.",
+    "",
+    "A `rewrite` REPLACES the request path with the destination, so FastAPI saw",
+    "/api/index for every request and answered 404 to all of them. A legacy",
+    "`route` whose dest is the function file preserves the original path, which",
+    "is what an ASGI app needs in order to route at all.",
+    "",
+    "`builds` and `routes` cannot be combined with `rewrites`/`functions`, which",
+    "is why the modern keys are gone."
+  ],
 
-  "rewrites": [
+  "version": 2,
+
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/api/index"
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": "app/**",
+        "maxLambdaSize": "30mb"
+      }
     }
   ],
 
-  "functions": {
-    "api/index.py": {
-      "memory": 1024,
-      "maxDuration": 30,
-      "includeFiles": "app/**"
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.py"
     }
-  }
+  ]
 }
