@@ -1,16 +1,4 @@
 {
-  "//": [
-    "`routes` rather than `rewrites`, deliberately.",
-    "",
-    "A `rewrite` REPLACES the request path with the destination, so FastAPI saw",
-    "/api/index for every request and answered 404 to all of them. A legacy",
-    "`route` whose dest is the function file preserves the original path, which",
-    "is what an ASGI app needs in order to route at all.",
-    "",
-    "`builds` and `routes` cannot be combined with `rewrites`/`functions`, which",
-    "is why the modern keys are gone."
-  ],
-
   "version": 2,
 
   "builds": [
