@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -73,7 +74,12 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # -- seeding ------------------------------------------------------------
-    seed_on_startup: bool = True
+    # Default off on serverless. Vercel sets VERCEL=1, and there "startup"
+    # happens on every cold start, so seeding there means creating the schema
+    # and counting rows over the network before the first request can be
+    # answered - which is slow at best and a failed invocation at worst.
+    # A long-running server still seeds on boot as before.
+    seed_on_startup: bool = os.environ.get("VERCEL") != "1"
     seed_demo_data: bool = True
 
     @property

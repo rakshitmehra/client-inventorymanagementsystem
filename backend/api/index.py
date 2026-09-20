@@ -51,12 +51,24 @@ except Exception:  # noqa: BLE001 - reported through the fallback app below
     # Credentials can appear in a connection error. Never put them in a response.
     _summary = re.sub(r"://[^@/\s]+@", "://<redacted>@", _summary)
 
+    # The facts that separate the handful of things that actually go wrong
+    # here, gathered once at import rather than on every request.
+    _app_dir = os.path.join(_BACKEND_ROOT, "app")
+    _diagnosis = (
+        f"python       : {sys.version.split()[0]}   (this app needs 3.11 or newer)\n"
+        f"app/ bundled : {os.path.isdir(_app_dir)}\n"
+        f"app/main.py  : {os.path.isfile(os.path.join(_app_dir, 'main.py'))}\n"
+        f"backend root : {_BACKEND_ROOT}\n"
+        f"on sys.path  : {_BACKEND_ROOT in sys.path}\n"
+    )
+
     async def app(scope, receive, send):  # type: ignore[misc]
         if scope["type"] != "http":
             return
         body = (
             "KitchenStock API failed to start.\n\n"
             f"{_summary}\n\n"
+            f"{_diagnosis}\n"
             "The full traceback is in the Vercel function logs "
             "(Deployments > the deployment > Logs).\n"
         ).encode()

@@ -45,7 +45,15 @@ log = logging.getLogger("kitchenstock")
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     if settings.seed_on_startup:
-        ensure_seed()
+        try:
+            ensure_seed()
+        except Exception:
+            # Seeding is a convenience: it creates the schema on an empty
+            # database. If it fails, the API can still serve every request
+            # against a database that is already set up, so log it and carry
+            # on rather than failing the whole process - which on serverless
+            # turns one bad boot into a total outage with no readable reason.
+            log.exception("Startup seeding failed - continuing without it")
     log.info("%s ready on port %s", settings.app_name, settings.port)
     log.info("Database: %s", settings.database_url.split("@")[-1])
     yield
