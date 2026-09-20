@@ -316,15 +316,18 @@ a:hover { color: var(--brand-800); }
 }
 
 .menu-toggle {
+  /* Hidden here: on desktop the sidebar is always on screen, so a button that
+     opens it would do nothing. The 1024px query switches this to `grid` and
+     turns it into the drawer's open button. `place-items` is set now so it
+     centres its icon the moment it becomes visible. */
   display: none;
+  place-items: center;
   background: var(--white);
   border: 2px solid var(--ink-300);
   border-radius: var(--radius-sm);
   width: var(--tap);
   height: var(--tap);
   cursor: pointer;
-  display: grid;
-  place-items: center;
 }
 
 .content { padding: 28px; flex: 1; min-width: 0; }
