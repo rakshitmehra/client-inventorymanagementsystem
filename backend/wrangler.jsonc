@@ -1,0 +1,51 @@
+/**
+ * KitchenStock API on Cloudflare Containers.
+ *
+ * Cloudflare Workers cannot run this service: Python Workers execute in
+ * Pyodide (WASM), which cannot load psycopg's libpq extension, and a Worker
+ * cannot open a raw TCP socket to PostgreSQL from Python. Containers can - it
+ * runs the Dockerfile next to this file - so worker/index.ts is a thin front
+ * door that forwards every request to that container.
+ *
+ * This lives in the service it deploys, the same way frontend/vercel.json
+ * lives in the frontend. Run `wrangler deploy` from this directory.
+ *
+ * Cloudflare Containers is a young product and its bindings have moved before.
+ * If `wrangler deploy` rejects a key below, check the field names against the
+ * current docs rather than assuming the deployment is broken:
+ *   https://developers.cloudflare.com/containers/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kitchenstock-api",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "containers": [
+    {
+      "class_name": "KitchenStockApi",
+      "image": "./Dockerfile",
+      // "basic" is the smallest instance. The API is I/O bound - it waits on
+      // Supabase far more than it computes - so size up only if you measure a
+      // reason to.
+      "instance_type": "basic",
+      // Each instance opens its own pool to Supabase. Keep this low: the free
+      // Supabase tier allows few direct connections, and the pooler has limits
+      // of its own. max_instances x db_pool_size must stay under them.
+      "max_instances": 2
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [{ "name": "API", "class_name": "KitchenStockApi" }]
+  },
+
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KitchenStockApi"] }]
+
+  // Secrets are NOT set here - this file is committed. Set them once with:
+  //   wrangler secret put DATABASE_URL
+  //   wrangler secret put JWT_SECRET
+  //   wrangler secret put CORS_ORIGINS
+}

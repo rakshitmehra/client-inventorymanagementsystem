@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.git/
+.gitignore
+.pytest_cache/
+.ruff_cache/
+*.log
+
+# ---- Cloudflare deployment tooling ------------------------------------------
+# The build context is this directory, so without these the whole Node
+# toolchain would be copied into a Python image that has no use for it. The
+# Worker runs on Cloudflare's edge, not inside the container.
+node_modules/
+.wrangler/
+worker/
+package.json
+bun.lock
+tsconfig.json
+wrangler.jsonc

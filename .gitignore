@@ -1,0 +1,21 @@
+# Each service has its own .gitignore; this covers the repository root.
+
+# ---- environment -----------------------------------------------------------
+.env
+.env.local
+*.local
+
+# ---- editors / os ----------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- local database volumes ------------------------------------------------
+cockroach-data/
+crdb-data/
+
+# ---- logs ------------------------------------------------------------------
+*.log
+logs/

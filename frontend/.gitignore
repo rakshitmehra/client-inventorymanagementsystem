@@ -1,0 +1,43 @@
+# ---- dependencies ----------------------------------------------------------
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# ---- next.js ---------------------------------------------------------------
+/.next/
+/out/
+next-env.d.ts
+
+# ---- production ------------------------------------------------------------
+/build
+
+# ---- environment -----------------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# ---- testing ---------------------------------------------------------------
+/coverage
+
+# ---- misc ------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.pem
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun-debug.log*
+
+# bun.lock IS committed on purpose - it pins the dependency tree.
+.bun/
+.vercel
+.eslintcache
+
+# ---- editors ---------------------------------------------------------------
+.idea/
+.vscode/
+*.swp

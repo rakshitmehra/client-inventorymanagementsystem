@@ -1,0 +1,25 @@
+# KitchenStock API - runtime dependencies
+# Install with:  pip install -r requirements.txt
+
+# web framework
+fastapi==0.141.1
+uvicorn==0.53.0
+starlette==1.6.0
+
+# validation and settings
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
+python-dotenv==1.2.3
+
+# database - PostgreSQL (Supabase) over the psycopg 3 driver.
+# sqlalchemy-cockroachdb is only needed for a cockroachdb+psycopg:// URL; it is
+# kept so an existing CockroachDB deployment still starts, and is safe to drop
+# if you have moved off it for good.
+SQLAlchemy==2.0.54
+psycopg[binary]==3.3.5
+sqlalchemy-cockroachdb==2.0.4
+
+# authentication
+PyJWT==2.14.0
+bcrypt==5.0.0

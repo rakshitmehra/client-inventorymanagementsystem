@@ -1,0 +1,71 @@
+# ============================================================================
+# KitchenStock - two independent services plus a PostgreSQL database.
+#
+#   docker compose up --build
+#
+#   API + docs           http://localhost:8000/docs
+#   Frontend             http://localhost:3000
+#
+# This mirrors production (PostgreSQL, as Supabase serves) on your own machine.
+# For deploying to Vercel + Cloudflare + Supabase, see DEPLOYMENT.md.
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------- database --
+  postgres:
+    image: postgres:16-alpine
+    container_name: kitchenstock-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: kitchenstock
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Without -d it checks the "postgres" database, which is ready before
+      # ours is; the API would then start against a database that is missing.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kitchenstock"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # ------------------------------------------------------------------- api --
+  api:
+    build:
+      context: ./backend
+    container_name: kitchenstock-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/kitchenstock
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      SEED_ON_STARTUP: "true"
+      SEED_DEMO_DATA: "true"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  # -------------------------------------------------------------- frontend --
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the browser bundle, so it must be reachable from the
+        # user's browser - not from inside the compose network.
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+    container_name: kitchenstock-web
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

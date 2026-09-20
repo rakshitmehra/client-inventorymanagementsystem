@@ -1,0 +1,55 @@
+# ---- environment -----------------------------------------------------------
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ---- python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---- virtual environments --------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# ---- tooling ---------------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ---- local databases / data -----------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+cockroach-data/
+crdb-data/
+
+# ---- Cloudflare deployment tooling ------------------------------------------
+node_modules/
+.wrangler/
+.dev.vars
+# bun.lock IS committed - it pins the wrangler/container SDK versions used to
+# deploy, so a later deploy builds with the same tooling.
+
+# ---- logs ------------------------------------------------------------------
+*.log
+logs/
+
+# ---- editors / os ----------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

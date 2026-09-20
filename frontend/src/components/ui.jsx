@@ -1,0 +1,553 @@
+'use client';
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import Link from 'next/link';
+import { Icon, renderIcon } from './Icon';
+
+/* ------------------------------------------------------------------ toast -- */
+const ToastContext = createContext(null);
+
+export function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+
+  const dismiss = useCallback((id) => {
+    setToasts((list) => list.filter((t) => t.id !== id));
+  }, []);
+
+  const push = useCallback(
+    (message, tone = 'info', ttl = 7000) => {
+      const id = Math.random().toString(36).slice(2);
+      setToasts((list) => [...list, { id, message, tone }]);
+      if (ttl) setTimeout(() => dismiss(id), ttl);
+      return id;
+    },
+    [dismiss],
+  );
+
+  const toast = {
+    // Messages linger longer than the usual few seconds: there is no rush.
+    success: (message) => push(message, 'success', 8000),
+    error: (message) => push(message, 'error', 14000),
+    info: (message) => push(message, 'info', 8000),
+  };
+
+  const icons = { success: 'check-circle', error: 'alert', info: 'info' };
+
+  return (
+    <ToastContext.Provider value={toast}>
+      {children}
+      <div className="toast-stack" role="status" aria-live="polite">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast ${t.tone}`}>
+            <span className="toast-icon" aria-hidden="true">
+              <Icon name={icons[t.tone]} size={22} />
+            </span>
+            <span style={{ flex: 1 }}>{t.message}</span>
+            <button
+              type="button"
+              className="toast-close"
+              onClick={() => dismiss(t.id)}
+              aria-label="Close message"
+            >
+              <Icon name="close" size={18} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+export const useToast = () => {
+  const context = useContext(ToastContext);
+  if (!context) throw new Error('useToast must be used inside a ToastProvider');
+  return context;
+};
+
+/* ---------------------------------------------------------------- basics -- */
+export function Badge({ tone = 'gray', dot = false, children }) {
+  return <span className={`badge ${tone}${dot ? ' dot' : ''}`}>{children}</span>;
+}
+
+export function Spinner({ white = false }) {
+  return <span className={`spinner${white ? ' white' : ''}`} />;
+}
+
+export function Loading({ label = 'Just a moment…' }) {
+  return (
+    <div className="loading-page">
+      <Spinner />
+      <span className="muted">{label}</span>
+    </div>
+  );
+}
+
+export function Button({
+  variant = 'secondary',
+  size,
+  loading = false,
+  icon,
+  children,
+  className = '',
+  ...rest
+}) {
+  return (
+    <button
+      type="button"
+      className={`btn btn-${variant}${size ? ` btn-${size}` : ''} ${className}`}
+      {...rest}
+      disabled={loading || rest.disabled}
+    >
+      {loading ? (
+        <Spinner white={variant === 'primary' || variant === 'danger'} />
+      ) : (
+        icon && <span className="btn-icon-slot">{renderIcon(icon, 19)}</span>
+      )}
+      {children}
+    </button>
+  );
+}
+
+/**
+ * A large, obvious "do this thing" tile. Used instead of burying the common
+ * jobs behind small toolbar buttons.
+ */
+export function ActionCard({ href, onClick, icon, title, sub, primary = false }) {
+  const content = (
+    <>
+      <span className="action-card-icon" aria-hidden="true">
+        {renderIcon(icon, 26)}
+      </span>
+      <span style={{ minWidth: 0 }}>
+        <span className="action-card-title" style={{ display: 'block' }}>
+          {title}
+        </span>
+        {sub && <span className="action-card-sub">{sub}</span>}
+      </span>
+    </>
+  );
+
+  const className = `action-card${primary ? ' primary' : ''}`;
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" className={className} onClick={onClick}>
+      {content}
+    </button>
+  );
+}
+
+export function EmptyState({ icon = 'box', title, message, action }) {
+  return (
+    <div className="empty">
+      <div className="empty-icon" aria-hidden="true">
+        {renderIcon(icon, 34)}
+      </div>
+      <h4>{title}</h4>
+      {message && <p>{message}</p>}
+      {action}
+    </div>
+  );
+}
+
+export function Alert({ tone = 'info', title, children }) {
+  const icons = { info: 'info', warn: 'alert', error: 'alert', success: 'check-circle' };
+  return (
+    <div className={`alert ${tone}`}>
+      <span className="alert-icon" aria-hidden="true">
+        <Icon name={icons[tone]} size={22} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        {title && <strong>{title}</strong>}
+        {title && children ? <div className="mt-4">{children}</div> : children}
+      </div>
+    </div>
+  );
+}
+
+/** A numbered heading, so a long form reads as a short sequence of steps. */
+export function Step({ number, title, sub }) {
+  return (
+    <div className="step-head">
+      <span className="step-number" aria-hidden="true">
+        {number}
+      </span>
+      <span>
+        <span className="step-title" style={{ display: 'block' }}>
+          {title}
+        </span>
+        {sub && <span className="step-sub">{sub}</span>}
+      </span>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------- forms -- */
+export function Field({ label, required, optional, error, hint, children, className = '' }) {
+  return (
+    <div className={`field ${className}`}>
+      {label && (
+        <label className="label">
+          {label}
+          {required && <span className="req" aria-hidden="true">*</span>}
+          {optional && <span className="optional">(you can leave this blank)</span>}
+        </label>
+      )}
+      {children}
+      {error && (
+        <div className="field-error">
+          <Icon name="alert" size={18} />
+          <span>{error}</span>
+        </div>
+      )}
+      {hint && !error && <div className="field-hint">{hint}</div>}
+    </div>
+  );
+}
+
+export function Input({ error, className = '', ...rest }) {
+  return <input className={`input ${error ? 'error' : ''} ${className}`} {...rest} />;
+}
+
+export function NumberInput({ error, className = '', ...rest }) {
+  return (
+    <input
+      type="number"
+      step="any"
+      inputMode="decimal"
+      className={`input num ${error ? 'error' : ''} ${className}`}
+      {...rest}
+    />
+  );
+}
+
+export function Textarea({ error, className = '', ...rest }) {
+  return <textarea className={`textarea ${error ? 'error' : ''} ${className}`} {...rest} />;
+}
+
+export function Select({ error, options = [], placeholder, className = '', children, ...rest }) {
+  return (
+    <select className={`select ${error ? 'error' : ''} ${className}`} {...rest}>
+      {placeholder && <option value="">{placeholder}</option>}
+      {options.map((option) => (
+        <option key={option.value} value={option.value} disabled={option.disabled}>
+          {option.label}
+        </option>
+      ))}
+      {children}
+    </select>
+  );
+}
+
+export function Checkbox({ label, ...rest }) {
+  return (
+    <label className="checkbox">
+      <input type="checkbox" {...rest} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+export function DateInput(props) {
+  return <input type="date" className="input" {...props} />;
+}
+
+/** Debounced search box: fires onChange once typing settles. */
+export function SearchInput({ value, onChange, placeholder = 'Type to search…', delay = 350 }) {
+  const [text, setText] = useState(value ?? '');
+  const first = useRef(true);
+
+  useEffect(() => {
+    setText(value ?? '');
+  }, [value]);
+
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      if (text !== value) onChange(text);
+    }, delay);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+
+  return (
+    <div className="search">
+      <span className="search-icon" aria-hidden="true">
+        <Icon name="search" size={20} />
+      </span>
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+      />
+    </div>
+  );
+}
+
+/**
+ * Search stays visible; everything else folds away. Most people only ever need
+ * the search box, and a wall of dropdowns is the fastest way to lose them.
+ */
+export function FilterBar({ children, more, onClear, hasFilters = false }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="filter-bar">
+      {children}
+      {more && (
+        <Button onClick={() => setOpen((v) => !v)} icon={open ? 'chevron-up' : 'chevron-down'}>
+          {open ? 'Hide filters' : 'More filters'}
+        </Button>
+      )}
+      {hasFilters && onClear && (
+        <Button onClick={onClear} icon="close">
+          Clear
+        </Button>
+      )}
+      {more && open && <div className="filter-more">{more}</div>}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------- modal -- */
+export function Modal({ open, title, subtitle, onClose, children, footer, size = '' }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div className={`modal ${size}`} role="dialog" aria-modal="true" aria-label={title}>
+        <div className="modal-head">
+          <div style={{ minWidth: 0 }}>
+            <h3>{title}</h3>
+            {subtitle && <p>{subtitle}</p>}
+          </div>
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+            aria-label="Close this window"
+          >
+            <Icon name="close" size={22} />
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-foot">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+export function ConfirmDialog({
+  open,
+  title = 'Are you sure?',
+  message,
+  confirmLabel = 'Yes, do it',
+  tone = 'danger',
+  loading = false,
+  onConfirm,
+  onCancel,
+}) {
+  return (
+    <Modal
+      open={open}
+      title={title}
+      onClose={loading ? undefined : onCancel}
+      footer={
+        <>
+          <Button onClick={onCancel} disabled={loading}>
+            No, go back
+          </Button>
+          <Button variant={tone} onClick={onConfirm} loading={loading}>
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      <p>{message}</p>
+    </Modal>
+  );
+}
+
+/* ------------------------------------------------------------ data table -- */
+/**
+ * Columns: { key, label, align, sortable, width, render(row) }
+ * Sorting is reported upward so the service does the ordering.
+ */
+export function DataTable({
+  columns,
+  rows,
+  loading,
+  empty,
+  sort,
+  order,
+  onSort,
+  onRowClick,
+  rowKey = (row, index) => row.id ?? index,
+  footer,
+}) {
+  if (loading) return <Loading />;
+  if (!rows?.length) return empty ?? <EmptyState title="Nothing here yet" />;
+
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th
+                key={column.key}
+                className={`${column.align === 'right' ? 'num' : ''} ${
+                  column.sortable && onSort ? 'sortable' : ''
+                }`}
+                style={column.width ? { width: column.width } : undefined}
+                onClick={column.sortable && onSort ? () => onSort(column.key) : undefined}
+              >
+                {column.label}
+                {column.sortable && onSort && sort === column.key && (
+                  <span className="sort-arrow" aria-hidden="true">
+                    <Icon name={order === 'desc' ? 'chevron-down' : 'chevron-up'} size={16} />
+                  </span>
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr
+              key={rowKey(row, index)}
+              className={onRowClick ? 'clickable' : undefined}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+            >
+              {columns.map((column) => (
+                <td
+                  key={column.key}
+                  className={column.align === 'right' ? 'num' : undefined}
+                  data-label={typeof column.label === 'string' ? column.label : ''}
+                >
+                  {column.render ? column.render(row, index) : row[column.key]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        {footer && <tfoot>{footer}</tfoot>}
+      </table>
+    </div>
+  );
+}
+
+export function Pagination({ meta, onPage }) {
+  if (!meta || meta.total_pages <= 1) {
+    return meta?.total ? (
+      <span className="info muted">
+        {meta.total} {meta.total === 1 ? 'row' : 'rows'}
+      </span>
+    ) : null;
+  }
+
+  const { page, total_pages: pages, total, page_size: size } = meta;
+  const from = (page - 1) * size + 1;
+  const to = Math.min(total, page * size);
+
+  return (
+    <div className="pagination">
+      <span className="info">
+        Showing {from}–{to} of {total}
+      </span>
+      <Button onClick={() => onPage(page - 1)} disabled={page <= 1} icon="arrow-left">
+        Previous
+      </Button>
+      <span className="nowrap strong">
+        Page {page} of {pages}
+      </span>
+      <Button onClick={() => onPage(page + 1)} disabled={page >= pages} icon="arrow-right">
+        Next
+      </Button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- stat tile -- */
+export function Stat({ icon, tone = '', label, value, meta, onClick }) {
+  const body = (
+    <>
+      {icon && (
+        <div className={`stat-icon ${tone}`} aria-hidden="true">
+          {renderIcon(icon, 24)}
+        </div>
+      )}
+      <div className="stat-body">
+        <div className="stat-label">{label}</div>
+        <div className="stat-value">{value}</div>
+        {meta && <div className="stat-meta">{meta}</div>}
+      </div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" className="stat" onClick={onClick}>
+        {body}
+      </button>
+    );
+  }
+  return <div className="stat">{body}</div>;
+}
+
+/* ------------------------------------------------------------ mini chart -- */
+export function BarList({ items, valueKey = 'value', labelKey = 'label', format = (v) => v }) {
+  const max = Math.max(...items.map((item) => Number(item[valueKey]) || 0), 1);
+  return (
+    <div className="bar-chart">
+      {items.map((item, index) => (
+        <div className="bar-row" key={item.id ?? index}>
+          <span className="bar-label">{item[labelKey]}</span>
+          <span className="bar-value">{format(item[valueKey])}</span>
+          <div className="bar-track">
+            <div
+              className="bar-fill"
+              style={{ width: `${((Number(item[valueKey]) || 0) / max) * 100}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
