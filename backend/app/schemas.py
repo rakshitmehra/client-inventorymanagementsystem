@@ -269,6 +269,40 @@ class TransferRequest(Schema):
         return self
 
 
+class RequestLine(Schema):
+    item_id: int
+    quantity: Quantity
+    unit_id: int | None = None
+    notes: str | None = Field(default=None, max_length=300)
+
+
+class StockRequestCreate(Schema):
+    kitchen_id: int | None = None
+    needed_by: str | None = Field(default=None, max_length=20)
+    notes: str | None = Field(default=None, max_length=500)
+    items: list[RequestLine] = Field(min_length=1)
+
+
+class ApprovedLine(Schema):
+    id: int
+    approved_quantity: NonNegative
+
+
+class StockRequestApprove(Schema):
+    """
+    Lines are optional: send none and every line is approved as asked. Send a
+    line with a smaller number to cut it, or zero to refuse that line while
+    approving the rest.
+    """
+
+    items: list[ApprovedLine] = Field(default_factory=list)
+    decision_note: str | None = Field(default=None, max_length=500)
+
+
+class StockRequestDecline(Schema):
+    decision_note: str = Field(min_length=3, max_length=500)
+
+
 class ProductionPreviewRequest(Schema):
     kitchen_id: int
     product_id: int

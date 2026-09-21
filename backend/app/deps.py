@@ -163,8 +163,15 @@ class Pagination:
         }
 
 
+#: Screens that filter in the browser ask for the whole list in one request.
+#: The ceiling is what keeps that honest - a caller can take a catalogue in a
+#: single page, but never enough rows to build a response that times out. Lists
+#: that outgrow it stay paginated and say so.
+MAX_PAGE_SIZE = 500
+
+
 def pagination(page: int = 1, page_size: int = 25) -> Pagination:
-    return Pagination(page=max(1, page), page_size=min(200, max(1, page_size)))
+    return Pagination(page=max(1, page), page_size=min(MAX_PAGE_SIZE, max(1, page_size)))
 
 
 PaginationDep = Annotated[Pagination, Depends(pagination)]

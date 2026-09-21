@@ -129,9 +129,9 @@ def _build_transfer(db, user: CurrentUser, document_id: int) -> dict:
     return {
         "document_type": "TRANSFER",
         "title": (
-            "Stock Transfer Slip"
+            "Stock Transfer Note"
             if transfer.to_location_type == "KITCHEN"
-            else "Stock Return Slip"
+            else "Stock Return Note"
         ),
         "document_no": transfer.transfer_no,
         "document_date": dt(transfer.transfer_date),
@@ -191,7 +191,7 @@ def _build_production(db, user: CurrentUser, document_id: int) -> dict:
 
     return {
         "document_type": "PRODUCTION",
-        "title": "Production Slip",
+        "title": "Production Note",
         "document_no": record.production_no,
         "document_date": dt(record.produced_at),
         "status": record.status,

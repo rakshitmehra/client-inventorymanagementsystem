@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Layout from '@/components/Layout';
 import AdminOnly from '@/components/AdminOnly';
-import { useAction, useFetch } from '@/lib/hooks';
+import { FETCH_ALL, useAction, useClientTable, useFetch } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import {
@@ -17,7 +17,9 @@ import {
   Field,
   Input,
   Modal,
-  FilterBar,SearchInput,
+  FilterBar,
+  Pagination,
+  SearchInput,
   Select,
   Textarea,
   useToast,
@@ -39,11 +41,18 @@ function Suppliers() {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
-  const { data, loading, error, reload } = useFetch(
-    `/suppliers?include_inactive=${includeInactive}${
-      search ? `&search=${encodeURIComponent(search)}` : ''
-    }`,
-  );
+  // Fetched once with everything in it; the search box and the toggle below
+  // filter that copy in the browser, so typing is instant.
+  const { data, loading, error, reload } = useFetch(`/suppliers?include_inactive=true&page_size=${FETCH_ALL}`);
+
+  const table = useClientTable(data?.data, {
+    search,
+    searchKeys: ['name', 'contact_person', 'phone', 'email'],
+    predicate: (row) => (includeInactive ? true : row.is_active),
+    sort: 'name',
+    serverTotal: data?.meta?.total,
+    resetKey: includeInactive,
+  });
 
   async function remove() {
     try {
@@ -95,7 +104,8 @@ function Suppliers() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           columns={[
             {
               key: 'name',
@@ -165,6 +175,8 @@ function Suppliers() {
             />
           }
         />
+
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <SupplierForm

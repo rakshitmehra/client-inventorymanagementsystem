@@ -13,7 +13,7 @@ import {
   Badge,
   Button,
   ConfirmDialog,
-  DataTable,
+  PagedTable,
   EmptyState,
   Field,
   Input,
@@ -177,7 +177,7 @@ export default function ProductDetailPage() {
             </div>
           </div>
 
-          <DataTable
+          <PagedTable
             rows={active.ingredients}
             columns={[
               {
@@ -264,7 +264,7 @@ export default function ProductDetailPage() {
               Past versions are kept so historical production still shows what was actually used
             </span>
           </div>
-          <DataTable
+          <PagedTable
             rows={product.recipes}
             columns={[
               {

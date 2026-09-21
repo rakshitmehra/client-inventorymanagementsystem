@@ -5,8 +5,15 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
-import { useAction, useFetch, useListState, useReference } from '@/lib/hooks';
-import { api, qs } from '@/lib/api';
+import {
+  FETCH_ALL,
+  useAction,
+  useClientTable,
+  useFetch,
+  useListState,
+  useReference,
+} from '@/lib/hooks';
+import { api } from '@/lib/api';
 import { STOCK_STATUS, dateTime, money, num, qty } from '@/lib/format';
 import {
   Alert,
@@ -18,7 +25,8 @@ import {
   Loading,
   Modal,
   NumberInput,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
   Stat,
@@ -44,17 +52,35 @@ function KitchenInventory() {
   const [state, update, setSort] = useListState({
     sort: 'name',
     order: 'asc',
-    page_size: 50,
     stock_status: searchParams.get('stock_status') ?? '',
   });
   const [editing, setEditing] = useState(null);
   const [minLevel, setMinLevel] = useState('');
   const { run, loading: saving } = useAction();
 
-  const { data, loading, error, reload } = useFetch(`/kitchens/${id}/inventory${qs(state)}`);
+  const { data, loading, error, reload } = useFetch(
+    `/kitchens/${id}/inventory?page_size=${FETCH_ALL}`,
+  );
+  // The whole kitchen, before any filter. The counts above the table describe
+  // the kitchen itself, so they must not shrink when someone narrows the view.
   const rows = data?.data ?? [];
-  const meta = data?.meta;
   const kitchen = data?.kitchen;
+
+  const table = useClientTable(rows, {
+    search: state.search ?? '',
+    searchKeys: ['item_name', 'sku'],
+    filters: { category_id: state.category_id ?? '' },
+    predicate: (row) => {
+      if (state.hide_zero === 'true' && Number(row.quantity) <= 0) return false;
+      if (!state.stock_status) return true;
+      const wanted = { low: 'LOW', out: 'OUT', in: 'OK' }[state.stock_status];
+      return row.stock_status === wanted;
+    },
+    sort: state.sort === 'name' ? 'item_name' : state.sort,
+    order: state.order,
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
 
   async function saveMinLevel() {
     try {
@@ -99,18 +125,18 @@ function KitchenInventory() {
       {error && <Alert tone="error">{error.message}</Alert>}
 
       <div className="grid cols-4 mb-16">
-        <Stat icon="rupee" tone="green" label="Stock value" value={money(meta?.stock_value ?? 0)} />
-        <Stat icon="ingredient" tone="blue" label="Items held" value={num(meta?.total ?? 0)} />
+        <Stat icon="rupee" tone="green" label="Stock value" value={money(data?.meta?.stock_value ?? 0)} />
+        <Stat icon="ingredient" tone="blue" label="Items held" value={num(data?.meta?.total ?? 0)} />
         <Stat
           icon="alert"
           tone="amber"
-          label="Low on this page"
+          label="Running low"
           value={num(rows.filter((r) => r.stock_status === 'LOW').length)}
         />
         <Stat
           icon="out"
           tone="red"
-          label="Out on this page"
+          label="All gone"
           value={num(rows.filter((r) => r.stock_status === 'OUT').length)}
         />
       </div>
@@ -160,7 +186,8 @@ function KitchenInventory() {
           sort={state.sort}
           order={state.order}
           onSort={setSort}
-          rows={rows}
+          rows={table.rows}
+          startIndex={table.startIndex}
           rowKey={(r) => r.item_id}
           columns={[
             {
@@ -270,11 +297,7 @@ function KitchenInventory() {
           }
         />
 
-        {meta && (
-          <div className="card-foot">
-            <Pagination meta={meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <Modal

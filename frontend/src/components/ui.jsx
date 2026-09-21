@@ -10,6 +10,7 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { Icon, renderIcon } from './Icon';
+import { useClientTable } from '@/lib/hooks';
 
 /* ------------------------------------------------------------------ toast -- */
 const ToastContext = createContext(null);
@@ -420,15 +421,43 @@ export function DataTable({
   onRowClick,
   rowKey = (row, index) => row.id ?? index,
   footer,
+  /**
+   * Row numbers. `startIndex` is the number of the first row on this page, so
+   * page 2 of a 20-row table starts at 21 rather than restarting at 1 - the
+   * number then matches what someone means when they say "line 27".
+   */
+  numbered = true,
+  startIndex = 1,
+  /**
+   * Paging that survives printing.
+   *
+   * Pass a `useClientTable` result here and the table keeps every matching row
+   * in the document, marking the ones outside the current page so CSS can hide
+   * them. On screen you get twenty rows; on paper the whole thing prints,
+   * which is the entire point of a report.
+   *
+   * Lists with no natural ceiling should keep passing `rows` and `startIndex`
+   * instead, so the browser never holds thousands of rows it cannot show.
+   */
+  page,
 }) {
+  const visible = page ? page.allRows : rows;
+  const firstNumber = page ? 1 : startIndex;
+  const offset = page ? (page.meta.page - 1) * page.meta.page_size : null;
+
   if (loading) return <Loading />;
-  if (!rows?.length) return empty ?? <EmptyState title="Nothing here yet" />;
+  if (!visible?.length) return empty ?? <EmptyState title="Nothing here yet" />;
 
   return (
     <div className="table-wrap">
       <table className="data">
         <thead>
           <tr>
+            {numbered && (
+              <th className="row-number" scope="col">
+                #
+              </th>
+            )}
             {columns.map((column) => (
               <th
                 key={column.key}
@@ -449,12 +478,26 @@ export function DataTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
+          {visible.map((row, index) => (
             <tr
               key={rowKey(row, index)}
-              className={onRowClick ? 'clickable' : undefined}
+              className={
+                [
+                  onRowClick ? 'clickable' : '',
+                  offset !== null && (index < offset || index >= offset + page.meta.page_size)
+                    ? 'off-page'
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
+              {numbered && (
+                <td className="row-number" data-label="">
+                  {firstNumber + index}
+                </td>
+              )}
               {columns.map((column) => (
                 <td
                   key={column.key}
@@ -473,33 +516,131 @@ export function DataTable({
   );
 }
 
+/**
+ * A table that pages itself.
+ *
+ * For lists that arrive whole and already filtered - a report's rows, the
+ * lines on one transfer - where the caller has nothing to decide beyond "show
+ * me twenty at a time". It keeps every row in the document and hides the ones
+ * off the current page, so the table pages at a desk and still prints
+ * complete.
+ *
+ * Screens with their own search and filter controls use `useClientTable`
+ * directly instead, because they need the filtered set for their own totals.
+ */
+export function PagedTable({ rows, pageSize, ...props }) {
+  const table = useClientTable(rows, pageSize ? { pageSize } : undefined);
+  return (
+    <>
+      <DataTable {...props} page={table} />
+      <Pagination meta={table.meta} onPage={table.setPage} />
+    </>
+  );
+}
+
 export function Pagination({ meta, onPage }) {
-  if (!meta || meta.total_pages <= 1) {
-    return meta?.total ? (
-      <span className="info muted">
-        {meta.total} {meta.total === 1 ? 'row' : 'rows'}
-      </span>
-    ) : null;
+  const total = meta?.total ?? 0;
+  const pages = meta?.total_pages ?? 0;
+
+  // The component owns its footer bar, so a table with nothing to page through
+  // renders no empty strip under it and no call site has to guess.
+  if (!total) return null;
+
+  // Said out loud whenever the browser is holding only part of the list, so a
+  // filtered view is never mistaken for a complete one.
+  const partial = meta.truncated ? (
+    <span className="info warn-text">
+      Showing the most recent {meta.filtered_from} of {meta.truncated}. Narrow the dates to
+      search further back.
+    </span>
+  ) : null;
+
+  if (pages <= 1) {
+    return (
+      <div className="card-foot">
+        <span className="info muted">
+          {total} {total === 1 ? 'row' : 'rows'}
+          {meta.filtered_from > total && ` of ${meta.filtered_from}`}
+        </span>
+        {partial}
+      </div>
+    );
   }
 
-  const { page, total_pages: pages, total, page_size: size } = meta;
+  const { page, page_size: size } = meta;
   const from = (page - 1) * size + 1;
   const to = Math.min(total, page * size);
 
   return (
-    <div className="pagination">
-      <span className="info">
-        Showing {from}–{to} of {total}
-      </span>
-      <Button onClick={() => onPage(page - 1)} disabled={page <= 1} icon="arrow-left">
-        Previous
-      </Button>
-      <span className="nowrap strong">
-        Page {page} of {pages}
-      </span>
-      <Button onClick={() => onPage(page + 1)} disabled={page >= pages} icon="arrow-right">
-        Next
-      </Button>
+    <div className="card-foot">
+      {partial}
+      <div className="pagination">
+        <span className="info">
+          Showing {from}–{to} of {total}
+        </span>
+        <Button onClick={() => onPage(page - 1)} disabled={page <= 1} icon="arrow-left">
+          Previous
+        </Button>
+        <span className="nowrap strong">
+          Page {page} of {pages}
+        </span>
+        <Button onClick={() => onPage(page + 1)} disabled={page >= pages} icon="arrow-right">
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- skeleton -- */
+/**
+ * A grey placeholder in the shape of the thing that is loading.
+ *
+ * Preferred over a spinner where the layout is known in advance: the page
+ * settles into its final shape instead of collapsing and jumping when the data
+ * lands, which is the part that actually feels slow.
+ */
+export function Skeleton({ width, height = 16, radius = 6, className = '' }) {
+  return (
+    <span
+      className={`skeleton ${className}`.trim()}
+      style={{ width: width ?? '100%', height, borderRadius: radius }}
+      aria-hidden="true"
+    />
+  );
+}
+
+/** A stat tile's shape, for use while its numbers are on their way. */
+export function StatSkeleton() {
+  return (
+    <div className="stat" aria-hidden="true">
+      <Skeleton width={46} height={46} radius={10} />
+      <div className="stat-body">
+        <Skeleton width="55%" height={12} />
+        <Skeleton width="75%" height={24} className="mt-8" />
+        <Skeleton width="40%" height={11} className="mt-4" />
+      </div>
+    </div>
+  );
+}
+
+/** A card with a heading and a few table rows' worth of placeholder. */
+export function CardSkeleton({ rows = 4, title = true }) {
+  return (
+    <div className="card" aria-hidden="true">
+      {title && (
+        <div className="card-head">
+          <Skeleton width={180} height={18} />
+        </div>
+      )}
+      <div className="card-body">
+        {Array.from({ length: rows }).map((_, index) => (
+          <div key={index} className="skeleton-row">
+            <Skeleton width="45%" height={14} />
+            <Skeleton width="20%" height={14} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

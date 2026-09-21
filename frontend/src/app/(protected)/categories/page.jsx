@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Layout from '@/components/Layout';
 import AdminOnly from '@/components/AdminOnly';
-import { useAction, useFetch } from '@/lib/hooks';
+import { useAction, useClientTable, useFetch } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { date, num } from '@/lib/format';
 import {
@@ -17,6 +17,7 @@ import {
   Field,
   Input,
   Modal,
+  Pagination,
   Select,
   Textarea,
   useToast,
@@ -37,9 +38,14 @@ function Categories() {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
-  const { data, loading, error, reload } = useFetch(
-    `/categories?include_inactive=${includeInactive}`,
-  );
+  // One fetch with everything; the toggle filters it in the browser.
+  const { data, loading, error, reload } = useFetch('/categories?include_inactive=true');
+
+  const table = useClientTable(data?.data, {
+    predicate: (row) => (includeInactive ? true : row.is_active),
+    sort: 'name',
+    resetKey: includeInactive,
+  });
 
   async function remove() {
     try {
@@ -82,7 +88,8 @@ function Categories() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           columns={[
             {
               key: 'name',
@@ -148,6 +155,8 @@ function Categories() {
             />
           }
         />
+
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <CategoryForm

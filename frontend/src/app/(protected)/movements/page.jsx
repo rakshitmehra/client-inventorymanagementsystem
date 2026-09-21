@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
-import { useFetch, useListState, useReference } from '@/lib/hooks';
+import { FETCH_ALL, useClientTable, useFetch, useListState, useReference } from '@/lib/hooks';
 import { qs } from '@/lib/api';
 import { MOVEMENT_LABELS, dateTime, isoDate, num } from '@/lib/format';
 import {
@@ -29,9 +29,39 @@ export default function MovementsPage() {
   const router = useRouter();
   const { isAdmin } = useAuth();
   const { categories } = useReference();
-  const [state, update] = useListState({ page_size: 50 });
+  const [state, update] = useListState();
 
-  const { data, loading, error } = useFetch(`/movements${qs(state)}`);
+  // Only the dates go to the server: they are what keeps an ever-growing
+  // ledger to one fetch. Everything else is applied below, as you type.
+  const { data, loading, error } = useFetch(
+    `/movements${qs({ from: state.from, to: state.to, page_size: FETCH_ALL })}`,
+  );
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['movement_no', 'item_name', 'sku', 'reference_no', 'location_label'],
+    filters: {
+      location_type: state.location_type ?? '',
+      kitchen_id: state.kitchen_id ?? '',
+      movement_type: state.movement_type ?? '',
+      // The row carries the category's name, not its id.
+      category_name: state.category_id ?? '',
+    },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
+
+  // Totalled over every row the filters keep, not just the page on screen and
+  // not the server's figure for the whole date range - so the tiles and the
+  // table always describe the same set of movements.
+  const movedIn = table.allRows.reduce(
+    (sum, r) => (r.direction === 'IN' ? sum + Number(r.quantity) : sum),
+    0,
+  );
+  const movedOut = table.allRows.reduce(
+    (sum, r) => (r.direction === 'OUT' ? sum + Number(r.quantity) : sum),
+    0,
+  );
   const kitchens = useFetch('/kitchens?include_inactive=true');
 
   const hasFilters =
@@ -51,9 +81,9 @@ export default function MovementsPage() {
       {error && <Alert tone="error">{error.message}</Alert>}
 
       <div className="grid cols-3 mb-16">
-        <Stat icon="list" tone="blue" label="Ledger entries (filtered)" value={num(data?.meta?.total ?? 0)} />
-        <Stat icon="arrow-up" tone="green" label="Quantity in" value={num(data?.meta?.total_in ?? 0)} />
-        <Stat icon="arrow-down" tone="red" label="Quantity out" value={num(data?.meta?.total_out ?? 0)} />
+        <Stat icon="list" tone="blue" label="Entries shown" value={num(table.meta.total)} />
+        <Stat icon="arrow-up" tone="green" label="Quantity in" value={num(movedIn)} />
+        <Stat icon="arrow-down" tone="red" label="Quantity out" value={num(movedOut)} />
       </div>
 
       <div className="card">
@@ -102,7 +132,7 @@ export default function MovementsPage() {
                   value={state.category_id ?? ''}
                   onChange={(e) => update({ category_id: e.target.value })}
                   placeholder="All categories"
-                  options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                  options={categories.map((c) => ({ value: c.name, label: c.name }))}
                 />
                 <DateInput
                   value={state.from ?? ''}
@@ -129,7 +159,8 @@ export default function MovementsPage() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           columns={[
             {
               key: 'created_at',
@@ -218,11 +249,7 @@ export default function MovementsPage() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
     </Layout>
   );

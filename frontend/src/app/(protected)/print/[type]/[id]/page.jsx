@@ -287,14 +287,29 @@ function PrintDocument() {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={3}>{doc.totals.line_count} line item(s)</td>
+              <td colSpan={3}>
+                <strong>{doc.totals.line_count}</strong> line item(s)
+              </td>
               <td className="num" colSpan={footerSpan}>
-                {showsCost ? 'Total value' : ''}
+                {showsCost ? 'Value at cost' : ''}
               </td>
               {showsCost && <td className="num">{money(doc.totals.total_cost)}</td>}
             </tr>
           </tfoot>
         </table>
+
+        {/* A stock movement between our own locations is not a sale. Say so on
+            the document itself, so nobody downstream mistakes it for one. */}
+        <div className="slip-declaration">
+          {showsCost && (
+            <>
+              <strong>Value shown is at cost, for internal stock accounting only.</strong>{' '}
+            </>
+          )}
+          {doc.document_type === 'TRANSFER'
+            ? 'Internal stock transfer between company locations - not a sale.'
+            : 'Internal stock record - not a sale.'}
+        </div>
 
         {doc.notes && (
           <div className="slip-notes">

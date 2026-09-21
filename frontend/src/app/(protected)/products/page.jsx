@@ -4,8 +4,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
-import { useAction, useFetch, useListState, useReference } from '@/lib/hooks';
-import { api, qs } from '@/lib/api';
+import {
+  FETCH_ALL,
+  useAction,
+  useClientTable,
+  useFetch,
+  useListState,
+  useReference,
+} from '@/lib/hooks';
+import { api } from '@/lib/api';
 import { money, num } from '@/lib/format';
 import {
   Alert,
@@ -18,7 +25,8 @@ import {
   Input,
   Modal,
   NumberInput,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
   Textarea,
@@ -31,10 +39,24 @@ export default function ProductsPage() {
   const { isAdmin } = useAuth();
   const { units, categories } = useReference();
 
-  const [state, update] = useListState({ page_size: 25 });
+  const [state, update] = useListState();
   const [editing, setEditing] = useState(null);
 
-  const { data, loading, error, reload } = useFetch(`/products${qs(state)}`);
+  const { data, loading, error, reload } = useFetch(
+    `/products?include_inactive=true&page_size=${FETCH_ALL}`,
+  );
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['name', 'sku', 'description'],
+    filters: { category_id: state.category_id ?? '' },
+    predicate: (row) => {
+      if (state.has_recipe === 'true' && !row.active_recipe_id) return false;
+      return state.include_inactive === 'true' ? true : row.is_active;
+    },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
 
   return (
     <Layout
@@ -96,7 +118,8 @@ export default function ProductsPage() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           onRowClick={(r) => router.push(`/products/${r.id}`)}
           columns={[
             {
@@ -192,11 +215,7 @@ export default function ProductsPage() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <ProductForm

@@ -12,7 +12,7 @@ import {
   Badge,
   Button,
   ConfirmDialog,
-  DataTable,
+  PagedTable,
   EmptyState,
   Field,
   Loading,
@@ -209,7 +209,7 @@ export default function KitchenDetailPage() {
               </Button>
             </div>
           </div>
-          <DataTable
+          <PagedTable
             loading={production.loading}
             rows={production.data?.data ?? []}
             onRowClick={(r) => router.push(`/production/${r.id}`)}
@@ -255,7 +255,7 @@ export default function KitchenDetailPage() {
               </Button>
             </div>
           </div>
-          <DataTable
+          <PagedTable
             loading={transfers.loading}
             rows={transfers.data?.data ?? []}
             onRowClick={(r) => router.push(`/transfers/${r.id}`)}
@@ -292,7 +292,7 @@ export default function KitchenDetailPage() {
             <h3>Assignment history</h3>
             <span className="muted small">Who has managed this kitchen over time</span>
           </div>
-          <DataTable
+          <PagedTable
             rows={kitchen.manager_history}
             columns={[
               {

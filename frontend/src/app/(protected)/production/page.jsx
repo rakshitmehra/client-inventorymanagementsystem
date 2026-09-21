@@ -3,8 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
-import { useFetch, useListState } from '@/lib/hooks';
-import { qs } from '@/lib/api';
+import { FETCH_ALL, useClientTable, useFetch, useListState } from '@/lib/hooks';
 import { dateTime, isoDate, money, num, qty } from '@/lib/format';
 import {
   Alert,
@@ -13,7 +12,8 @@ import {
   DataTable,
   DateInput,
   EmptyState,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
 } from '@/components/ui';
@@ -21,9 +21,23 @@ import {
 export default function ProductionPage() {
   const router = useRouter();
   const { isAdmin } = useAuth();
-  const [state, update] = useListState({ page_size: 25 });
+  const [state, update] = useListState();
 
-  const { data, loading, error } = useFetch(`/production${qs(state)}`);
+  const { data, loading, error } = useFetch(`/production?page_size=${FETCH_ALL}`);
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['production_no', 'product_name', 'product_sku', 'kitchen_name'],
+    filters: { kitchen_id: state.kitchen_id ?? '', product_id: state.product_id ?? '' },
+    predicate: (row) => {
+      const day = (row.produced_at ?? '').slice(0, 10);
+      if (state.from && day < state.from) return false;
+      if (state.to && day > state.to) return false;
+      return true;
+    },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
   const kitchens = useFetch('/kitchens?include_inactive=true');
   const products = useFetch('/products?page_size=200');
 
@@ -88,7 +102,8 @@ export default function ProductionPage() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           onRowClick={(r) => router.push(`/production/${r.id}`)}
           columns={[
             {
@@ -168,11 +183,7 @@ export default function ProductionPage() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
     </Layout>
   );

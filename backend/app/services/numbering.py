@@ -10,6 +10,7 @@ SEQUENCES: dict[str, tuple[str, int]] = {
     "ADJUSTMENT": ("ADJ", 5),
     "RECEIPT": ("GRN", 5),
     "MOVEMENT": ("MOV", 6),
+    "REQUEST": ("REQ", 5),
 }
 
 

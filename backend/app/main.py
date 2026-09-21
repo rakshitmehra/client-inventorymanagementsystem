@@ -29,6 +29,7 @@ from .routers import (
     products,
     records,
     reports,
+    requests as requests_router,
     transfers,
     users,
 )
@@ -114,6 +115,7 @@ for router in (
     catalog.router,
     main_inventory.router,
     transfers.router,
+    requests_router.router,
     products.router,
     production.router,
     records.router,

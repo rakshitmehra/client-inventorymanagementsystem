@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
-import { useAction, useFetch, useListState } from '@/lib/hooks';
-import { api, qs } from '@/lib/api';
+import { FETCH_ALL, useAction, useClientTable, useFetch, useListState } from '@/lib/hooks';
+import { api } from '@/lib/api';
 import { WASTAGE_REASONS, dateTime, humanise, isoDate, money, num, qty, withCurrentTime } from '@/lib/format';
 import { ItemPicker } from '@/components/LineItems';
 import {
@@ -18,7 +18,8 @@ import {
   Field,
   Modal,
   NumberInput,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
   Stat,
@@ -30,10 +31,28 @@ export default function WastagePage() {
   const router = useRouter();
   const toast = useToast();
   const { isAdmin, user } = useAuth();
-  const [state, update] = useListState({ page_size: 25 });
+  const [state, update] = useListState();
   const [open, setOpen] = useState(false);
 
-  const { data, loading, error, reload } = useFetch(`/wastage${qs(state)}`);
+  const { data, loading, error, reload } = useFetch(`/wastage?page_size=${FETCH_ALL}`);
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['wastage_no', 'item_name', 'sku', 'location_label'],
+    filters: { kitchen_id: state.kitchen_id ?? '', reason_code: state.reason_code ?? '' },
+    predicate: (row) => {
+      const day = (row.recorded_at ?? '').slice(0, 10);
+      if (state.from && day < state.from) return false;
+      if (state.to && day > state.to) return false;
+      return true;
+    },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
+
+  // Same reasoning as the stock ledger: the value shown is the value of the
+  // rows being shown.
+  const wastedValue = table.allRows.reduce((sum, r) => sum + Number(r.estimated_cost ?? 0), 0);
   const kitchens = useFetch('/kitchens?include_inactive=true');
 
   return (
@@ -52,10 +71,10 @@ export default function WastagePage() {
         <Stat
           icon="out"
           tone="red"
-          label="Wastage value (filtered)"
-          value={money(data?.meta?.total_cost ?? 0)}
+          label="Wastage value shown"
+          value={money(wastedValue)}
         />
-        <Stat icon="list" tone="amber" label="Events" value={num(data?.meta?.total ?? 0)} />
+        <Stat icon="list" tone="amber" label="Events" value={num(table.meta.total)} />
         <Stat
           icon="layers"
           tone="blue"
@@ -110,7 +129,8 @@ export default function WastagePage() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           columns={[
             {
               key: 'wastage_no',
@@ -180,11 +200,7 @@ export default function WastagePage() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <WastageForm

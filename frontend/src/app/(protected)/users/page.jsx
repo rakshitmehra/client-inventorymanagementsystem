@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Layout from '@/components/Layout';
 import AdminOnly from '@/components/AdminOnly';
 import { useAuth } from '@/lib/auth';
-import { useAction, useFetch } from '@/lib/hooks';
+import { FETCH_ALL, useAction, useClientTable, useFetch } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { initials, relative } from '@/lib/format';
 import {
@@ -18,6 +18,7 @@ import {
   Field,
   Input,
   Modal,
+  Pagination,
   FilterBar,SearchInput,
   Select,
   useToast,
@@ -43,10 +44,19 @@ function Users() {
   const [resetting, setResetting] = useState(null);
   const [toggling, setToggling] = useState(null);
 
-  const path = `/users?include_inactive=${includeInactive}${role ? `&role=${role}` : ''}${
-    search ? `&search=${encodeURIComponent(search)}` : ''
-  }`;
-  const { data, loading, error, reload } = useFetch(path);
+  // Everyone, once. Search, role and the active toggle all filter that copy
+  // here rather than asking the server again for each keystroke.
+  const { data, loading, error, reload } = useFetch(`/users?include_inactive=true&page_size=${FETCH_ALL}`);
+
+  const table = useClientTable(data?.data, {
+    search,
+    searchKeys: ['full_name', 'username', 'email', 'phone'],
+    filters: { role_code: role },
+    predicate: (row) => (includeInactive ? true : row.is_active),
+    sort: 'full_name',
+    serverTotal: data?.meta?.total,
+    resetKey: [role, includeInactive],
+  });
   const roles = useFetch('/users/roles');
   const kitchens = useFetch('/kitchens?include_inactive=true');
 
@@ -108,7 +118,8 @@ function Users() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           columns={[
             {
               key: 'full_name',
@@ -211,6 +222,8 @@ function Users() {
             />
           }
         />
+
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <UserForm

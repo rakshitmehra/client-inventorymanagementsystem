@@ -38,13 +38,22 @@ export function useAppFrame() {
 function navigationFor(user, isAdmin) {
   if (isAdmin) {
     return [
-      { section: null, items: [{ href: '/dashboard', label: 'Home', icon: 'home' }] },
+      {
+        // Same reasoning as the kitchen menu below: the two screens an
+        // administrator opens most - what the main store is holding, and what
+        // the kitchens are waiting on them for - sit above any heading.
+        section: null,
+        items: [
+          { href: '/dashboard', label: 'Home', icon: 'home' },
+          { href: '/main-inventory', label: 'Main Store', icon: 'box' },
+          { href: '/requests', label: 'Stock Requests', icon: 'request' },
+        ],
+      },
       {
         section: 'Everyday jobs',
         items: [
           { href: '/goods-receipts/new', label: 'Receive Stock', icon: 'inbox' },
           { href: '/transfers/new', label: 'Send to a Kitchen', icon: 'truck' },
-          { href: '/production/new', label: 'Record Cooking', icon: 'cooking' },
           { href: '/wastage', label: 'Record Waste', icon: 'trash' },
           { href: '/adjustments', label: 'Correct a Count', icon: 'adjust' },
         ],
@@ -52,10 +61,8 @@ function navigationFor(user, isAdmin) {
       {
         section: 'Look things up',
         items: [
-          { href: '/main-inventory', label: 'Main Store', icon: 'box' },
           { href: '/kitchens', label: 'Kitchens', icon: 'kitchen' },
           { href: '/transfers', label: 'Past Deliveries', icon: 'documents' },
-          { href: '/production', label: 'Past Cooking', icon: 'history' },
           { href: '/movements', label: 'Stock History', icon: 'clock' },
           { href: '/reports', label: 'Reports', icon: 'chart' },
         ],
@@ -68,7 +75,6 @@ function navigationFor(user, isAdmin) {
           { href: '/categories', label: 'Categories', icon: 'tag' },
           { href: '/suppliers', label: 'Suppliers', icon: 'supplier' },
           { href: '/users', label: 'People', icon: 'users' },
-          { href: '/audit-logs', label: 'Activity Log', icon: 'audit' },
         ],
       },
     ];
@@ -76,11 +82,24 @@ function navigationFor(user, isAdmin) {
 
   const kitchenId = user?.kitchens?.[0]?.id;
   return [
-    { section: null, items: [{ href: '/dashboard', label: 'Home', icon: 'home' }] },
+    {
+      // The two things a kitchen manager opens most - what have I got, and
+      // what is on its way - sit at the very top, above the fold on a phone,
+      // rather than buried under a heading further down.
+      section: null,
+      items: [
+        { href: '/dashboard', label: 'Home', icon: 'home' },
+        ...(kitchenId
+          ? [{ href: `/kitchens/${kitchenId}/inventory`, label: 'My Stock', icon: 'box' }]
+          : []),
+        { href: '/transfers', label: 'Deliveries to Me', icon: 'truck' },
+      ],
+    },
     {
       section: 'Everyday jobs',
       items: [
-        { href: '/production/new', label: 'Record Cooking', icon: 'cooking' },
+        { href: '/requests/new', label: 'Ask for Stock', icon: 'request' },
+        { href: '/production/new', label: 'Record Production', icon: 'cooking' },
         { href: '/wastage', label: 'Record Waste', icon: 'trash' },
         { href: '/adjustments', label: 'Correct a Count', icon: 'adjust' },
       ],
@@ -88,11 +107,8 @@ function navigationFor(user, isAdmin) {
     {
       section: 'Look things up',
       items: [
-        ...(kitchenId
-          ? [{ href: `/kitchens/${kitchenId}/inventory`, label: 'My Stock', icon: 'box' }]
-          : []),
-        { href: '/transfers', label: 'Deliveries to Me', icon: 'truck' },
-        { href: '/production', label: 'Past Cooking', icon: 'history' },
+        { href: '/requests', label: 'My Requests', icon: 'documents' },
+        { href: '/production', label: 'Production History', icon: 'history' },
         { href: '/products', label: 'Recipes', icon: 'recipe' },
         { href: '/movements', label: 'Stock History', icon: 'clock' },
         { href: '/reports', label: 'Reports', icon: 'chart' },

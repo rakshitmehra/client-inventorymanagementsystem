@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Layout from '@/components/Layout';
 import AdminOnly from '@/components/AdminOnly';
-import { useFetch, useListState } from '@/lib/hooks';
+import { FETCH_ALL, useClientTable, useFetch, useListState } from '@/lib/hooks';
 import { qs } from '@/lib/api';
 import { dateTime, humanise, initials, isoDate } from '@/lib/format';
 import {
@@ -14,7 +14,8 @@ import {
   DateInput,
   EmptyState,
   Modal,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
 } from '@/components/ui';
@@ -57,10 +58,27 @@ export default function AuditLogsPage() {
 }
 
 function AuditLogs() {
-  const [state, update] = useListState({ page_size: 50 });
+  const [state, update] = useListState();
   const [viewing, setViewing] = useState(null);
 
-  const { data, loading, error } = useFetch(`/audit-logs${qs(state)}`);
+  // Same reasoning as the stock ledger: the dates bound the fetch, the rest
+  // is filtered here.
+  const { data, loading, error } = useFetch(
+    `/audit-logs${qs({ from: state.from, to: state.to, page_size: FETCH_ALL })}`,
+  );
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['description', 'entity_label', 'full_name', 'username', 'entity_type'],
+    filters: {
+      action: state.action ?? '',
+      entity_type: state.entity_type ?? '',
+      user_id: state.user_id ?? '',
+      status: state.status ?? '',
+    },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
   const actions = useFetch('/audit-logs/actions');
   const users = useFetch('/users?include_inactive=true');
 
@@ -128,7 +146,8 @@ function AuditLogs() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           onRowClick={(r) => setViewing(r)}
           columns={[
             {
@@ -193,11 +212,7 @@ function AuditLogs() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <Modal

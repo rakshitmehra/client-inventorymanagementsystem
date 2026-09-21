@@ -1,3 +1,5 @@
+import { clearCache } from './cache';
+
 const TOKEN_KEY = 'kitchenstock.token';
 
 export const API_URL =
@@ -79,10 +81,21 @@ export function qs(params = {}) {
   return text ? `?${text}` : '';
 }
 
+/**
+ * Anything that changes data drops the read cache first.
+ *
+ * It happens before awaiting the response on purpose: if a write fails
+ * half-way, the safe assumption is still that something moved.
+ */
+const mutate = (method, path, body, options) => {
+  clearCache();
+  return request(method, path, body, options);
+};
+
 export const api = {
   get: (path) => request('GET', path),
-  post: (path, body, options) => request('POST', path, body ?? {}, options),
-  put: (path, body) => request('PUT', path, body ?? {}),
-  patch: (path, body) => request('PATCH', path, body ?? {}),
-  del: (path) => request('DELETE', path),
+  post: (path, body, options) => mutate('POST', path, body ?? {}, options),
+  put: (path, body) => mutate('PUT', path, body ?? {}),
+  patch: (path, body) => mutate('PATCH', path, body ?? {}),
+  del: (path) => mutate('DELETE', path),
 };

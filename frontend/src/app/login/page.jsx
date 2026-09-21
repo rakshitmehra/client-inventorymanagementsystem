@@ -93,7 +93,7 @@ export default function LoginPage() {
               <span className="login-feature-icon" aria-hidden="true">
                 <Icon name="cooking" size={22} />
               </span>
-              <span>Record what you cook and we take the ingredients off for you</span>
+              <span>Record what you produce and the ingredients come off automatically</span>
             </div>
             <div className="login-feature">
               <span className="login-feature-icon" aria-hidden="true">

@@ -3,8 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
-import { useFetch, useListState } from '@/lib/hooks';
-import { qs } from '@/lib/api';
+import { FETCH_ALL, useClientTable, useFetch, useListState } from '@/lib/hooks';
 import { dateTime, isoDate, money, num } from '@/lib/format';
 import {
   Alert,
@@ -13,7 +12,8 @@ import {
   DataTable,
   DateInput,
   EmptyState,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
 } from '@/components/ui';
@@ -21,10 +21,35 @@ import {
 export default function TransfersPage() {
   const router = useRouter();
   const { isAdmin } = useAuth();
-  const [state, update] = useListState({ page_size: 25 });
+  const [state, update] = useListState();
 
-  const { data, loading, error } = useFetch(`/transfers${qs(state)}`);
+  // Fetched once. Every control below narrows this copy in the browser, so the
+  // list reacts as you type rather than after a round trip.
+  const { data, loading, error } = useFetch(`/transfers?page_size=${FETCH_ALL}`);
   const kitchens = useFetch('/kitchens?include_inactive=true');
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['transfer_no', 'source_label', 'destination_label'],
+    predicate: (row) => {
+      // A transfer touches a kitchen at either end, so match both: picking
+      // "Central Kitchen" should show what it received AND what it sent back.
+      if (state.kitchen_id) {
+        const want = String(state.kitchen_id);
+        const touches =
+          String(row.from_kitchen_id ?? '') === want || String(row.to_kitchen_id ?? '') === want;
+        if (!touches) return false;
+      }
+      if (state.direction === 'to_kitchen' && row.to_location_type !== 'KITCHEN') return false;
+      if (state.direction === 'to_main' && row.to_location_type !== 'MAIN') return false;
+      const day = (row.transfer_date ?? '').slice(0, 10);
+      if (state.from && day < state.from) return false;
+      if (state.to && day > state.to) return false;
+      return true;
+    },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
 
   const hasFilters =
     state.search || state.kitchen_id || state.direction || state.from || state.to;
@@ -96,7 +121,8 @@ export default function TransfersPage() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           onRowClick={(r) => router.push(`/transfers/${r.id}`)}
           columns={[
             {
@@ -178,11 +204,7 @@ export default function TransfersPage() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
     </Layout>
   );

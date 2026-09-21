@@ -10,15 +10,57 @@ import {
   Alert,
   Badge,
   Button,
+  CardSkeleton,
   DataTable,
   EmptyState,
-  Loading,
+  Skeleton,
+  StatSkeleton,
   Stat,
 } from '@/components/ui';
 
 export default function DashboardPage() {
   const { isAdmin } = useAuth();
   return isAdmin ? <AdminHome /> : <KitchenHome />;
+}
+
+/**
+ * The dashboard's own shape, drawn while its numbers are in flight.
+ *
+ * A centred spinner told you only that something was happening; this shows
+ * where the tiles and tables are about to appear, so the page settles into
+ * place instead of springing into existence, and nothing moves under the
+ * pointer when the data lands.
+ */
+function DashboardSkeleton({ stats = 4, cards = 2 }) {
+  return (
+    <div aria-busy="true">
+      <span className="sr-only">Loading your dashboard</span>
+
+      <div className="action-row mb-16">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="action-card" aria-hidden="true">
+            <Skeleton width={44} height={44} radius={12} />
+            <Skeleton width="70%" height={16} className="mt-12" />
+            <Skeleton width="45%" height={12} className="mt-8" />
+          </div>
+        ))}
+      </div>
+
+      <Skeleton width={230} height={22} className="mt-24 mb-16" />
+
+      <div className={`grid cols-${stats} mb-16`}>
+        {Array.from({ length: stats }).map((_, index) => (
+          <StatSkeleton key={index} />
+        ))}
+      </div>
+
+      {Array.from({ length: cards }).map((_, index) => (
+        <div key={index} className="mb-16">
+          <CardSkeleton rows={5} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function greeting() {
@@ -36,12 +78,36 @@ function AdminHome() {
   const { data, loading, error } = useFetch('/dashboard/admin?days=30');
   const d = data?.data;
 
+  // Requests are the one thing on this screen that somebody else is waiting
+  // on. Only the count is needed, so ask for a single row and read the meta.
+  const requests = useFetch('/requests?page_size=1');
+  const waiting = requests.data?.meta?.pending ?? 0;
+
   const needsAttention = d ? d.main_inventory.low_stock + d.low_stock_kitchens.length : 0;
 
   return (
     <Layout title="Home" subtitle={`${greeting()}, ${user?.full_name?.split(' ')[0] ?? ''}`}>
-      {loading && <Loading label="Getting your numbers…" />}
+      {loading && <DashboardSkeleton stats={4} />}
       {error && <Alert tone="error">{error.message}</Alert>}
+
+      {/* A kitchen cannot get on with its day until this is answered, so it
+          goes above everything else - including the numbers. */}
+      {waiting > 0 && (
+        <Alert
+          tone="warn"
+          title={`${waiting} kitchen request${waiting === 1 ? '' : 's'} waiting for you`}
+        >
+          <div className="flex items-center gap-12 wrap">
+            <span>
+              {waiting === 1 ? 'A kitchen has' : 'Kitchens have'} asked the main store for stock.
+              Nothing moves until you decide.
+            </span>
+            <Button variant="primary" icon="request" onClick={() => router.push('/requests')}>
+              Review {waiting === 1 ? 'it' : 'them'}
+            </Button>
+          </div>
+        </Alert>
+      )}
 
       {d && (
         <>
@@ -62,6 +128,12 @@ function AdminHome() {
               icon="inbox"
               title="Receive Stock"
               sub="Record a delivery from a supplier"
+            />
+            <ActionCard
+              href="/requests"
+              icon="request"
+              title="Stock Requests"
+              sub={waiting > 0 ? `${waiting} waiting for a decision` : 'Nothing waiting'}
             />
             <ActionCard
               href="/reports"
@@ -105,7 +177,7 @@ function AdminHome() {
               tone="red"
               label="Waste this month"
               value={money(d.period.wastage_cost)}
-              meta={`${d.period.production_runs} cooking runs`}
+              meta={`${d.period.production_runs} production runs`}
               onClick={() => router.push('/wastage')}
             />
           </div>
@@ -252,7 +324,7 @@ function KitchenHome() {
       <Layout title="Home">
         <Alert tone="warn" title="You have not been given a kitchen yet">
           Please ask your manager to add you to a kitchen. Once they do, you will be able to record
-          your cooking here.
+          your production here.
         </Alert>
       </Layout>
     );
@@ -265,7 +337,7 @@ function KitchenHome() {
       title={user.kitchens[0].name}
       subtitle={`${greeting()}, ${user?.full_name?.split(' ')[0] ?? ''}`}
     >
-      {loading && <Loading label="Getting your kitchen ready…" />}
+      {loading && <DashboardSkeleton stats={3} />}
       {error && <Alert tone="error">{error.message}</Alert>}
 
       {d && (
@@ -278,8 +350,14 @@ function KitchenHome() {
               primary
               href="/production/new"
               icon="cooking"
-              title="Record Cooking"
-              sub="Say what you made today"
+              title="Record Production"
+              sub="Log what the kitchen produced"
+            />
+            <ActionCard
+              href="/requests/new"
+              icon="request"
+              title="Ask for Stock"
+              sub="Request more from the main store"
             />
             <ActionCard
               href={`/kitchens/${kitchenId}/inventory`}
@@ -320,7 +398,7 @@ function KitchenHome() {
               tone="violet"
               label="Made this month"
               value={`${num(d.period.units_produced)} items`}
-              meta={`${d.period.production_runs} cooking runs`}
+              meta={`${d.period.production_runs} production runs`}
               onClick={() => router.push('/production')}
             />
           </div>
@@ -368,7 +446,7 @@ function KitchenHome() {
 
             <div className="card">
               <div className="card-head">
-                <h3>What you cooked recently</h3>
+                <h3>Produced recently</h3>
                 <div className="card-head-actions">
                   <Button onClick={() => router.push('/production')} icon="history">
                     See all
@@ -379,10 +457,10 @@ function KitchenHome() {
                 <EmptyState
                   icon="cooking"
                   title="Nothing recorded yet"
-                  message="Use the Record Cooking button above after your first batch."
+                  message="Use the Record Production button above after your first batch."
                   action={
                     <Button variant="primary" onClick={() => router.push('/production/new')}>
-                      Record Cooking
+                      Record Production
                     </Button>
                   }
                 />

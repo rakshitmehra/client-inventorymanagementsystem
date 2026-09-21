@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useFetch } from '@/lib/hooks';
 import { dateTime, money, num, qty } from '@/lib/format';
-import { Alert, Badge, Button, DataTable, Loading, Stat } from '@/components/ui';
+import { Alert, Badge, Button, PagedTable, Loading, Stat } from '@/components/ui';
 
 export default function ProductionDetailPage() {
   const { id } = useParams();
@@ -79,7 +79,7 @@ export default function ProductionDetailPage() {
             </Badge>
           </div>
         </div>
-        <DataTable
+        <PagedTable
           rows={record.consumption}
           columns={[
             {
@@ -200,7 +200,7 @@ export default function ProductionDetailPage() {
             One deduction per ingredient, written as this run was confirmed
           </span>
         </div>
-        <DataTable
+        <PagedTable
           rows={record.movements}
           columns={[
             {

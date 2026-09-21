@@ -129,7 +129,7 @@ function NewProduction() {
 
   if (kitchens.loading) {
     return (
-      <Layout title="Record Cooking">
+      <Layout title="Record Production">
         <Loading />
       </Layout>
     );
@@ -137,7 +137,7 @@ function NewProduction() {
 
   if (!isAdmin && !user?.kitchens?.length) {
     return (
-      <Layout title="Record Cooking">
+      <Layout title="Record Production">
         <Alert tone="warn" title="You have not been given a kitchen yet">
           Please ask your manager to add you to a kitchen first.
         </Alert>
@@ -146,7 +146,7 @@ function NewProduction() {
   }
 
   return (
-    <Layout title="Record Cooking" subtitle="Tell us what you made and we will update your stock">
+    <Layout title="Record Production" subtitle="Log what was produced; the ingredients come off your stock">
       <div style={{ maxWidth: 940 }}>
         {/* ------------------------------------------------- step 1: what -- */}
         <div className="card mb-16">
@@ -175,7 +175,7 @@ function NewProduction() {
               <EmptyState
                 icon="recipe"
                 title="No recipes set up yet"
-                message="Someone needs to add a recipe before cooking can be recorded."
+                message="Someone needs to add a recipe before production can be recorded."
                 action={<Button onClick={() => router.push('/products')}>Go to recipes</Button>}
               />
             ) : (
@@ -361,7 +361,7 @@ function NewProduction() {
             >
               {preview
                 ? `Record ${num(preview.output_quantity)} × ${preview.product.name}`
-                : 'Record this cooking'}
+                : 'Record this production'}
             </Button>
             <p className="muted mt-12 center">
               Nothing changes until you press this and confirm on the next screen.

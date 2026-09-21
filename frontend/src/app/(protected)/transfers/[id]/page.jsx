@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useFetch } from '@/lib/hooks';
 import { MOVEMENT_LABELS, dateTime, money, num, qty } from '@/lib/format';
-import { Alert, Badge, Button, DataTable, Loading } from '@/components/ui';
+import { Alert, Badge, Button, PagedTable, Loading } from '@/components/ui';
 
 export default function TransferDetailPage() {
   const { id } = useParams();
@@ -102,7 +102,7 @@ export default function TransferDetailPage() {
             {num(transfer.total_items)} line(s) · {money(transfer.total_cost)}
           </span>
         </div>
-        <DataTable
+        <PagedTable
           rows={transfer.items}
           columns={[
             {
@@ -182,7 +182,7 @@ export default function TransferDetailPage() {
             Each item writes one entry out of the source and one into the destination
           </span>
         </div>
-        <DataTable
+        <PagedTable
           rows={transfer.movements}
           columns={[
             {

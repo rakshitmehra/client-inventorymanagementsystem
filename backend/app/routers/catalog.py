@@ -312,6 +312,23 @@ KITCHEN_QTY = (
     .where(KitchenInventory.item_id == Item.id)
     .scalar_subquery()
 )
+
+
+def kitchen_qty_for(user) -> object:
+    """
+    Kitchen holdings of an item, summed over the kitchens this user may see.
+
+    An administrator gets every kitchen. A kitchen manager gets only their own,
+    so the catalogue tells them what THEY are holding rather than what the
+    business is holding.
+    """
+    query = select(func.coalesce(func.sum(KitchenInventory.quantity), Decimal("0"))).where(
+        KitchenInventory.item_id == Item.id
+    )
+    if not user.is_admin:
+        # An empty list would make IN () match everything on some engines.
+        query = query.where(KitchenInventory.kitchen_id.in_(user.kitchen_ids or [-1]))
+    return query.scalar_subquery()
 MAIN_QTY = func.coalesce(MainInventory.quantity, Decimal("0"))
 
 ITEM_SORTS = {
@@ -325,8 +342,8 @@ ITEM_SORTS = {
 }
 
 
-def _item_row(item: Item, unit: Unit, category, supplier, main_qty, kitchen_qty) -> dict:
-    return {
+def _item_row(item: Item, unit: Unit, category, supplier, main_qty, kitchen_qty, user) -> dict:
+    row = {
         "id": item.id,
         "sku": item.sku,
         "name": item.name,
@@ -345,18 +362,31 @@ def _item_row(item: Item, unit: Unit, category, supplier, main_qty, kitchen_qty)
         "supplier_name": supplier.name if supplier else None,
         "is_perishable": item.is_perishable,
         "is_active": item.is_active,
-        "main_quantity": f(main_qty),
-        "kitchen_quantity": f(kitchen_qty),
-        "total_quantity": f((main_qty or 0) + (kitchen_qty or 0)),
         "created_at": dt(item.created_at),
         "updated_at": dt(item.updated_at),
     }
+
+    if user.is_admin:
+        row["main_quantity"] = f(main_qty)
+        row["kitchen_quantity"] = f(kitchen_qty)
+        row["total_quantity"] = f((main_qty or 0) + (kitchen_qty or 0))
+    else:
+        # What is in the main store is not a kitchen manager's business, and
+        # neither is what other kitchens hold. `kitchen_qty` has already been
+        # narrowed to their own kitchens by kitchen_qty_for(), so the only
+        # number they see is their own - which is the one they actually need
+        # when writing off stock or correcting a count.
+        row["main_quantity"] = None
+        row["kitchen_quantity"] = f(kitchen_qty)
+        row["total_quantity"] = f(kitchen_qty)
+
+    return row
 
 
 @router.get("/items")
 def list_items(
     db: DbSession,
-    _user: CurrentUserDep,
+    user: CurrentUserDep,
     page: PaginationDep,
     search: str | None = None,
     category_id: int | None = None,
@@ -366,7 +396,14 @@ def list_items(
     order: str | None = "asc",
 ):
     base = (
-        select(Item, Unit, Category, Supplier, MAIN_QTY.label("main_qty"), KITCHEN_QTY.label("kitchen_qty"))
+        select(
+            Item,
+            Unit,
+            Category,
+            Supplier,
+            MAIN_QTY.label("main_qty"),
+            kitchen_qty_for(user).label("kitchen_qty"),
+        )
         .join(Unit, Unit.id == Item.unit_id)
         .outerjoin(MainInventory, MainInventory.item_id == Item.id)
         .outerjoin(Category, Category.id == Item.category_id)
@@ -396,15 +433,22 @@ def list_items(
     ).all()
 
     return {
-        "data": [_item_row(*row) for row in rows],
+        "data": [_item_row(*row, user) for row in rows],
         "meta": page.meta(total),
     }
 
 
 @router.get("/items/{item_id}")
-def get_item_detail(item_id: int, db: DbSession, _user: CurrentUserDep):
+def get_item_detail(item_id: int, db: DbSession, user: CurrentUserDep):
     row = db.execute(
-        select(Item, Unit, Category, Supplier, MAIN_QTY.label("main_qty"), KITCHEN_QTY.label("kitchen_qty"))
+        select(
+            Item,
+            Unit,
+            Category,
+            Supplier,
+            MAIN_QTY.label("main_qty"),
+            kitchen_qty_for(user).label("kitchen_qty"),
+        )
         .join(Unit, Unit.id == Item.unit_id)
         .outerjoin(MainInventory, MainInventory.item_id == Item.id)
         .outerjoin(Category, Category.id == Item.category_id)
@@ -426,8 +470,11 @@ def get_item_detail(item_id: int, db: DbSession, _user: CurrentUserDep):
 
     return {
         "data": {
-            **_item_row(*row),
-            "stock": item_stock_breakdown(db, item_id),
+            **_item_row(*row, user),
+            # The per-location breakdown names the main store and every
+            # kitchen, so it is for administrators only. Managers already have
+            # their own holding in the row above.
+            "stock": item_stock_breakdown(db, item_id) if user.is_admin else None,
             "used_in_recipes": [
                 {
                     "product_id": pid,

@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
-import { useAction, useFetch, useListState } from '@/lib/hooks';
-import { api, qs } from '@/lib/api';
+import { FETCH_ALL, useAction, useClientTable, useFetch, useListState } from '@/lib/hooks';
+import { api } from '@/lib/api';
 import {
   ADJUSTMENT_REASONS,
   dateTime,
@@ -25,7 +25,8 @@ import {
   Field,
   Modal,
   NumberInput,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
   Stat,
@@ -36,13 +37,30 @@ import {
 export default function AdjustmentsPage() {
   const toast = useToast();
   const { isAdmin, user } = useAuth();
-  const [state, update] = useListState({ page_size: 25 });
+  const [state, update] = useListState();
   const [open, setOpen] = useState(false);
 
-  const { data, loading, error, reload } = useFetch(`/adjustments${qs(state)}`);
+  const { data, loading, error, reload } = useFetch(`/adjustments?page_size=${FETCH_ALL}`);
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['adjustment_no', 'item_name', 'sku', 'location_label'],
+    filters: {
+      kitchen_id: state.kitchen_id ?? '',
+      adjustment_type: state.adjustment_type ?? '',
+      reason_code: state.reason_code ?? '',
+    },
+    predicate: (row) => {
+      const day = (row.adjusted_at ?? '').slice(0, 10);
+      if (state.from && day < state.from) return false;
+      if (state.to && day > state.to) return false;
+      return true;
+    },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
   const kitchens = useFetch('/kitchens?include_inactive=true');
 
-  const rows = data?.data ?? [];
 
   return (
     <Layout
@@ -57,18 +75,18 @@ export default function AdjustmentsPage() {
       {error && <Alert tone="error">{error.message}</Alert>}
 
       <div className="grid cols-3 mb-16">
-        <Stat icon="adjust" tone="blue" label="Adjustments (filtered)" value={num(data?.meta?.total ?? 0)} />
+        <Stat icon="adjust" tone="blue" label="Adjustments (filtered)" value={num(table.meta.total)} />
         <Stat
           icon="arrow-up"
           tone="green"
-          label="Increases on this page"
-          value={num(rows.filter((r) => r.adjustment_type === 'INCREASE').length)}
+          label="Increases"
+          value={num(table.allRows.filter((r) => r.adjustment_type === 'INCREASE').length)}
         />
         <Stat
           icon="arrow-down"
           tone="red"
-          label="Decreases on this page"
-          value={num(rows.filter((r) => r.adjustment_type === 'DECREASE').length)}
+          label="Decreases"
+          value={num(table.allRows.filter((r) => r.adjustment_type === 'DECREASE').length)}
         />
       </div>
 
@@ -125,7 +143,8 @@ export default function AdjustmentsPage() {
 
         <DataTable
           loading={loading}
-          rows={rows}
+          rows={table.rows}
+          startIndex={table.startIndex}
           columns={[
             {
               key: 'adjustment_no',
@@ -199,11 +218,7 @@ export default function AdjustmentsPage() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <AdjustmentForm

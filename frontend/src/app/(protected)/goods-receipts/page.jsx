@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import AdminOnly from '@/components/AdminOnly';
-import { useFetch, useListState } from '@/lib/hooks';
-import { qs } from '@/lib/api';
+import { FETCH_ALL, useClientTable, useFetch, useListState } from '@/lib/hooks';
 import { dateTime, isoDate, money, num, qty } from '@/lib/format';
 import {
   Alert,
@@ -15,7 +14,8 @@ import {
   EmptyState,
   Loading,
   Modal,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
 } from '@/components/ui';
@@ -30,10 +30,26 @@ export default function GoodsReceiptsPage() {
 
 function GoodsReceipts() {
   const router = useRouter();
-  const [state, update] = useListState({ page_size: 25 });
+  const [state, update] = useListState();
   const [viewing, setViewing] = useState(null);
 
-  const { data, loading, error } = useFetch(`/main-inventory/receipts${qs(state)}`);
+  const { data, loading, error } = useFetch(
+    `/main-inventory/receipts?page_size=${FETCH_ALL}`,
+  );
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['receipt_no', 'invoice_no', 'supplier_name'],
+    filters: { supplier_id: state.supplier_id ?? '' },
+    predicate: (row) => {
+      const day = (row.received_at ?? '').slice(0, 10);
+      if (state.from && day < state.from) return false;
+      if (state.to && day > state.to) return false;
+      return true;
+    },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
   const suppliers = useFetch('/suppliers');
 
   return (
@@ -84,7 +100,8 @@ function GoodsReceipts() {
 
         <DataTable
           loading={loading}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           onRowClick={(r) => setViewing(r.id)}
           columns={[
             {
@@ -145,11 +162,7 @@ function GoodsReceipts() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <ReceiptModal

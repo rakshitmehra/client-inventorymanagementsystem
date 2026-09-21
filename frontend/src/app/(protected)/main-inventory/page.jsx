@@ -3,8 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import AdminOnly from '@/components/AdminOnly';
-import { useFetch, useListState, useReference } from '@/lib/hooks';
-import { qs } from '@/lib/api';
+import { FETCH_ALL, useClientTable, useFetch, useListState, useReference } from '@/lib/hooks';
 import { STOCK_STATUS, money, num, qty } from '@/lib/format';
 import {
   Alert,
@@ -30,13 +29,33 @@ export default function MainInventoryPage() {
 function MainInventory() {
   const router = useRouter();
   const { categories } = useReference();
-  const [state, update, setSort] = useListState({ sort: 'name', order: 'asc', page_size: 25 });
+  const [state, update, setSort] = useListState({ sort: 'name', order: 'asc' });
 
-  const { data, loading, error } = useFetch(`/main-inventory${qs(state)}`);
+  const { data, loading, error } = useFetch(`/main-inventory?page_size=${FETCH_ALL}`);
   const suppliers = useFetch('/suppliers');
 
-  const rows = data?.data ?? [];
-  const meta = data?.meta;
+  // The row carries the supplier's name but not its id, so the picker offers
+  // names as its values rather than resolving ids on every keystroke.
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['item_name', 'sku'],
+    filters: {
+      category_id: state.category_id ?? '',
+      supplier_name: state.supplier_id ?? '',
+    },
+    predicate: (row) => {
+      if (!state.stock_status) return true;
+      // The filter speaks plain English; the row speaks in flags.
+      const wanted = { low: 'LOW', out: 'OUT', in: 'OK' }[state.stock_status];
+      return row.stock_status === wanted;
+    },
+    sort: state.sort === 'name' ? 'item_name' : state.sort,
+    order: state.order,
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
+
+  const rows = table.allRows;
 
   return (
     <Layout
@@ -60,9 +79,9 @@ function MainInventory() {
           icon="rupee"
           tone="green"
           label="Stock value"
-          value={money(meta?.stock_value ?? 0)}
+          value={money(data?.meta?.stock_value ?? 0)}
         />
-        <Stat icon="ingredient" tone="blue" label="Ingredients listed" value={num(meta?.total ?? 0)} />
+        <Stat icon="ingredient" tone="blue" label="Ingredients listed" value={num(data?.meta?.total ?? 0)} />
         <Stat
           icon="alert"
           tone="amber"
@@ -90,7 +109,7 @@ function MainInventory() {
                   value={state.supplier_id ?? ''}
                   onChange={(e) => update({ supplier_id: e.target.value })}
                   placeholder="Any supplier"
-                  options={(suppliers.data?.data ?? []).map((s) => ({ value: s.id, label: s.name }))}
+                  options={(suppliers.data?.data ?? []).map((s) => ({ value: s.name, label: s.name }))}
                 />
                 <Select
                   value={state.stock_status ?? ''}
@@ -118,7 +137,8 @@ function MainInventory() {
           sort={state.sort}
           order={state.order}
           onSort={setSort}
-          rows={rows}
+          rows={table.rows}
+          startIndex={table.startIndex}
           rowKey={(r) => r.item_id}
           onRowClick={(r) => router.push(`/movements/item/${r.item_id}`)}
           columns={[
@@ -185,7 +205,7 @@ function MainInventory() {
             rows.length > 0 && (
               <tr>
                 <td colSpan={5} className="right">
-                  Total on this page
+                  Total of everything shown
                 </td>
                 <td className="num">
                   {money(rows.reduce((sum, r) => sum + Number(r.stock_value), 0))}
@@ -195,11 +215,7 @@ function MainInventory() {
           }
         />
 
-        {meta && (
-          <div className="card-foot">
-            <Pagination meta={meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
     </Layout>
   );

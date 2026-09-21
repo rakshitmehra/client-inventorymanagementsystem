@@ -19,13 +19,14 @@ Notes on the CockroachDB mapping
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -134,6 +135,21 @@ class AdjustmentReason(str, enum.Enum):
     MISSING_STOCK = "MISSING_STOCK"
     OPENING_BALANCE = "OPENING_BALANCE"
     OTHER = "OTHER"
+
+
+class RequestStatus(str, enum.Enum):
+    """
+    Lifecycle of a kitchen's request to the main store.
+
+    PENDING is the only state an administrator can act on, and every other
+    state is final: once a request has become a transfer, or been turned down,
+    re-deciding it would move stock a second time.
+    """
+
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    DECLINED = "DECLINED"
+    CANCELLED = "CANCELLED"
 
 
 class UnitDimension(str, enum.Enum):
@@ -540,6 +556,95 @@ class InventoryTransferItem(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     transfer: Mapped[InventoryTransfer] = relationship(back_populates="items")
+    item: Mapped[Item] = relationship()
+    unit: Mapped[Unit] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# stock requests (kitchen asks the main store for stock)
+# ---------------------------------------------------------------------------
+class StockRequest(Base):
+    """
+    A kitchen manager asking the main store to send them stock.
+
+    This is a request, not a movement: nothing leaves the main store until an
+    administrator approves it, and approving is what creates the transfer. The
+    link to that transfer is kept so the paper trail runs both ways - from the
+    request to the stock that satisfied it, and back again.
+    """
+
+    __tablename__ = "stock_requests"
+    __table_args__ = (
+        CheckConstraint(_in("status", RequestStatus), name="ck_request_status"),
+        CheckConstraint(
+            "(status = 'APPROVED' AND decided_at IS NOT NULL) OR status <> 'APPROVED'",
+            name="ck_request_approved_has_decision",
+        ),
+        Index("ix_request_kitchen", "kitchen_id"),
+        Index("ix_request_status", "status"),
+    )
+
+    id: Mapped[int] = _pk("stock_requests")
+    request_no: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    kitchen_id: Mapped[int] = _fk("kitchens.id", ondelete="RESTRICT")
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", nullable=False)
+    needed_by: Mapped[date | None] = mapped_column(Date)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    requested_by: Mapped[int | None] = _fk("users.id", ondelete="SET NULL")
+    requested_at: Mapped[datetime] = _now()
+
+    decided_by: Mapped[int | None] = mapped_column(
+        IdType, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_note: Mapped[str | None] = mapped_column(Text)
+
+    # Set when approval turns this into real stock movement.
+    transfer_id: Mapped[int | None] = mapped_column(
+        IdType, ForeignKey("inventory_transfers.id", ondelete="SET NULL")
+    )
+
+    kitchen: Mapped[Kitchen] = relationship()
+    requester: Mapped[User | None] = relationship(foreign_keys=[requested_by])
+    decider: Mapped[User | None] = relationship(foreign_keys=[decided_by])
+    transfer: Mapped[InventoryTransfer | None] = relationship()
+    items: Mapped[list[StockRequestItem]] = relationship(
+        back_populates="request", cascade="all, delete-orphan"
+    )
+
+
+class StockRequestItem(Base):
+    """
+    One line of a request.
+
+    ``quantity`` is what the kitchen asked for and never changes, so the
+    original ask stays on the record. ``approved_quantity`` is what the
+    administrator actually agreed to send, and is what the transfer uses. A
+    line cut to zero is a line refused while the rest of the request goes
+    through.
+    """
+
+    __tablename__ = "stock_request_items"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_request_item_quantity"),
+        CheckConstraint(
+            "approved_quantity IS NULL OR approved_quantity >= 0",
+            name="ck_request_item_approved_quantity",
+        ),
+        UniqueConstraint("request_id", "item_id", name="uq_request_item"),
+        Index("ix_request_items_request", "request_id"),
+    )
+
+    id: Mapped[int] = _pk("stock_request_items")
+    request_id: Mapped[int] = _fk("stock_requests.id", ondelete="CASCADE")
+    item_id: Mapped[int] = _fk("items.id", ondelete="RESTRICT")
+    unit_id: Mapped[int] = _fk("units.id", ondelete="RESTRICT")
+    quantity: Mapped[Decimal] = mapped_column(Qty, nullable=False)
+    approved_quantity: Mapped[Decimal | None] = mapped_column(Qty)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    request: Mapped[StockRequest] = relationship(back_populates="items")
     item: Mapped[Item] = relationship()
     unit: Mapped[Unit] = relationship()
 

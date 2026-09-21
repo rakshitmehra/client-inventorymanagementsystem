@@ -4,8 +4,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import AdminOnly from '@/components/AdminOnly';
-import { useAction, useFetch, useListState, useReference } from '@/lib/hooks';
-import { api, qs } from '@/lib/api';
+import {
+  FETCH_ALL,
+  useAction,
+  useClientTable,
+  useFetch,
+  useListState,
+  useReference,
+} from '@/lib/hooks';
+import { api } from '@/lib/api';
 import { money, num, qty } from '@/lib/format';
 import {
   Alert,
@@ -19,7 +26,8 @@ import {
   Input,
   Modal,
   NumberInput,
-  FilterBar,Pagination,
+  FilterBar,
+  Pagination,
   SearchInput,
   Select,
   Textarea,
@@ -40,12 +48,32 @@ function Items() {
   const { units, categories } = useReference();
   const { run, loading: busy } = useAction();
 
-  const [state, update, setSort] = useListState({ sort: 'name', order: 'asc', page_size: 25 });
+  const [state, update, setSort] = useListState({ sort: 'name', order: 'asc' });
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
-  const { data, loading, error, reload } = useFetch(`/items${qs(state)}`);
+  // Archived items are fetched too, and hidden below. The catalogue is small,
+  // and pulling both means the "Include archived" toggle is instant rather
+  // than a round trip that re-sorts the table under the user.
+  const { data, loading, error, reload } = useFetch(`/items?include_inactive=true&page_size=${FETCH_ALL}`);
   const suppliers = useFetch('/suppliers');
+
+  const table = useClientTable(data?.data, {
+    search: state.search ?? '',
+    searchKeys: ['name', 'sku', 'description'],
+    // The row names the supplier column default_supplier_id, not supplier_id;
+    // matching the wrong one would quietly filter everything away.
+    filters: {
+      category_id: state.category_id ?? '',
+      default_supplier_id: state.supplier_id ?? '',
+    },
+    predicate: (row) => (state.include_inactive === 'true' ? true : row.is_active),
+    // The column is headed "Category" but the row field is category_name.
+    sort: state.sort === 'category' ? 'category_name' : state.sort,
+    order: state.order,
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
 
   async function remove() {
     try {
@@ -112,7 +140,8 @@ function Items() {
           sort={state.sort}
           order={state.order}
           onSort={setSort}
-          rows={data?.data ?? []}
+          rows={table.rows}
+          startIndex={table.startIndex}
           columns={[
             {
               key: 'name',
@@ -206,11 +235,7 @@ function Items() {
           }
         />
 
-        {data?.meta && (
-          <div className="card-foot">
-            <Pagination meta={data.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
 
       <ItemForm

@@ -12,7 +12,7 @@ import {
   Badge,
   BarList,
   Button,
-  DataTable,
+  PagedTable,
   DateInput,
   EmptyState,
   Loading,
@@ -40,7 +40,7 @@ export default function ReportsPage() {
 }
 
 function Reports() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabs = TABS.filter((t) => isAdmin || !t.adminOnly);
@@ -57,12 +57,45 @@ function Reports() {
   const query = qs(dateless ? { kitchen_id: kitchenId } : { from, to, kitchen_id: kitchenId });
   const { data, loading, error } = useFetch(`/reports/${active}${query}`);
 
+  const activeTab = tabs.find((t) => t.key === active);
+  // These carry ten-ish columns and will not fit A4 portrait.
+  const WIDE = new Set(['adjustments', 'transfers', 'consumption', 'valuation']);
+  const kitchenName =
+    (kitchens.data?.data ?? []).find((k) => String(k.id) === String(kitchenId))?.name ??
+    'All kitchens';
+
   return (
     <Layout
       title="Reports"
       subtitle="Stock levels, consumption, movement and wastage across the business"
-      actions={<Button onClick={() => window.print()}>Print this report</Button>}
+      actions={<Button onClick={() => window.print()} icon="printer">Print this report</Button>}
     >
+      {/* Marks the whole report for landscape when it is too wide for A4
+          portrait; the rule only applies while printing. */}
+      {WIDE.has(active) && <div className="report-landscape" aria-hidden="true" />}
+
+      {/* Only ever seen on paper. A printed report that does not say who it
+          belongs to, what it covers or when it was run is not evidence of
+          anything - it is a screenshot. */}
+      <div className="report-print-head">
+        <div className="report-print-org">
+          <strong>Golden Crust Bakery &amp; Kitchens</strong>
+          <span>14 Industrial Estate Road, Pune 411001</span>
+        </div>
+        <h1>{activeTab?.label ?? 'Report'}</h1>
+        <dl className="report-print-meta">
+          <dt>Period</dt>
+          <dd>{dateless ? 'As at today' : `${from} to ${to}`}</dd>
+          <dt>Kitchen</dt>
+          <dd>{kitchenName}</dd>
+          <dt>Generated</dt>
+          <dd>
+            {new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+            {user?.full_name ? ` by ${user.full_name}` : ''}
+          </dd>
+        </dl>
+      </div>
+
       <div className="tabs no-print">
         {tabs.map((tab) => (
           <button
@@ -166,7 +199,7 @@ function LowStock({ data, isAdmin, router }) {
             <h3>Main Inventory — at or below minimum</h3>
             <span className="muted small">{main.length} item(s)</span>
           </div>
-          <DataTable
+          <PagedTable
             rows={main}
             rowKey={(r) => r.item_id}
             onRowClick={(r) => router.push(`/movements/item/${r.item_id}`)}
@@ -238,7 +271,7 @@ function LowStock({ data, isAdmin, router }) {
           <h3>Kitchens — at or below minimum</h3>
           <span className="muted small">{kitchens.length} line(s)</span>
         </div>
-        <DataTable
+        <PagedTable
           rows={kitchens}
           rowKey={(r, i) => `${r.kitchen_id}-${r.item_id}-${i}`}
           columns={[
@@ -336,7 +369,7 @@ function KitchenStock({ data, meta }) {
               <strong>{money(kitchen.stock_value)}</strong>
             </div>
           </div>
-          <DataTable
+          <PagedTable
             rows={kitchen.items}
             rowKey={(r) => `${r.kitchen_id}-${r.item_id}`}
             columns={[
@@ -425,7 +458,7 @@ function Consumption({ data }) {
             {date(data.meta.from)} – {date(data.meta.to)}
           </span>
         </div>
-        <DataTable
+        <PagedTable
           rows={rows}
           rowKey={(r) => r.item_id}
           columns={[
@@ -504,7 +537,7 @@ function Production({ data }) {
             {date(data.meta.from)} – {date(data.meta.to)}
           </span>
         </div>
-        <DataTable
+        <PagedTable
           rows={byProduct}
           rowKey={(r) => r.product_id}
           columns={[
@@ -561,7 +594,7 @@ function Production({ data }) {
           <div className="card-head">
             <h3>By kitchen</h3>
           </div>
-          <DataTable
+          <PagedTable
             rows={byKitchen}
             rowKey={(r) => r.kitchen_id}
             columns={[
@@ -610,7 +643,7 @@ function Transfers({ data, meta }) {
             {date(meta.from)} – {date(meta.to)}
           </span>
         </div>
-        <DataTable
+        <PagedTable
           rows={data.by_kitchen}
           rowKey={(r) => r.kitchen_id}
           columns={[
@@ -642,7 +675,7 @@ function Transfers({ data, meta }) {
         <div className="card-head">
           <h3>Most transferred items</h3>
         </div>
-        <DataTable
+        <PagedTable
           rows={data.by_item}
           rowKey={(r) => r.item_id}
           columns={[
@@ -678,7 +711,7 @@ function Transfers({ data, meta }) {
         <div className="card-head">
           <h3>All transfers</h3>
         </div>
-        <DataTable
+        <PagedTable
           rows={data.transfers}
           columns={[
             {
@@ -778,7 +811,7 @@ function Wastage({ data, meta }) {
             {date(meta.from)} – {date(meta.to)}
           </span>
         </div>
-        <DataTable
+        <PagedTable
           rows={byItem}
           rowKey={(r) => r.item_id}
           columns={[
@@ -852,7 +885,7 @@ function Adjustments({ data, meta }) {
             {date(meta.from)} – {date(meta.to)}
           </span>
         </div>
-        <DataTable
+        <PagedTable
           rows={data}
           columns={[
             {
@@ -936,7 +969,7 @@ function Valuation({ data, meta }) {
         <div className="card-head">
           <h3>Value by category</h3>
         </div>
-        <DataTable
+        <PagedTable
           rows={data.by_category}
           rowKey={(r, i) => `${r.category_name}-${i}`}
           columns={[
@@ -972,7 +1005,7 @@ function Valuation({ data, meta }) {
           <h3>Value by item</h3>
           <span className="muted small">Highest value first</span>
         </div>
-        <DataTable
+        <PagedTable
           rows={data.by_item}
           rowKey={(r) => r.item_id}
           columns={[

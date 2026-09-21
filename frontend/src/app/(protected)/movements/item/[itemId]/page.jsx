@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
-import { useFetch, useListState } from '@/lib/hooks';
+import { FETCH_ALL, useClientTable, useFetch, useListState } from '@/lib/hooks';
 import { qs } from '@/lib/api';
 import { MOVEMENT_LABELS, dateTime, isoDate, money, num, qty } from '@/lib/format';
 import {
@@ -40,14 +40,22 @@ function ItemLedger() {
   const searchParams = useSearchParams();
 
   const [state, update] = useListState({
-    page_size: 50,
     kitchen_id: searchParams.get('kitchen_id') ?? '',
   });
 
-  const { data, loading, error } = useFetch(`/movements/item/${itemId}${qs(state)}`);
+  // The dates bound the fetch; the kitchen is picked out here, so switching
+  // between kitchens does not re-read the whole history each time.
+  const { data, loading, error } = useFetch(
+    `/movements/item/${itemId}${qs({ from: state.from, to: state.to, page_size: FETCH_ALL })}`,
+  );
   const kitchens = useFetch('/kitchens?include_inactive=true');
 
   const payload = data?.data;
+  const table = useClientTable(payload?.movements, {
+    filters: { kitchen_id: state.kitchen_id ?? '' },
+    serverTotal: data?.meta?.total,
+    resetKey: state,
+  });
   const item = payload?.item;
   const summary = payload?.summary ?? {};
   const stock = payload?.stock;
@@ -190,7 +198,8 @@ function ItemLedger() {
 
         <DataTable
           loading={loading}
-          rows={payload.movements}
+          rows={table.rows}
+          startIndex={table.startIndex}
           columns={[
             {
               key: 'created_at',
@@ -262,11 +271,7 @@ function ItemLedger() {
           }
         />
 
-        {payload.meta && (
-          <div className="card-foot">
-            <Pagination meta={payload.meta} onPage={(page) => update({ page })} />
-          </div>
-        )}
+        <Pagination meta={table.meta} onPage={table.setPage} />
       </div>
     </Layout>
   );
