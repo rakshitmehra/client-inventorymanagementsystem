@@ -79,6 +79,15 @@ UNITS = [
     ("pcs", "Pieces", "COUNT", Decimal("1"), True),
     ("dozen", "Dozen", "COUNT", Decimal("12"), False),
     ("tray", "Tray (30)", "COUNT", Decimal("30"), False),
+    # How goods actually arrive from the supplier. A packet of chat masala is
+    # counted, not weighed, and the kitchen stock sheets are written that way -
+    # so the catalogue has to be able to say so. Each is one countable thing;
+    # the size varies by item and belongs in the item name.
+    ("pkt", "Packet", "COUNT", Decimal("1"), False),
+    ("tin", "Tin", "COUNT", Decimal("1"), False),
+    ("btl", "Bottle", "COUNT", Decimal("1"), False),
+    ("box", "Box", "COUNT", Decimal("1"), False),
+    ("tube", "Tube", "COUNT", Decimal("1"), False),
 ]
 
 SETTINGS = [

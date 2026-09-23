@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/lib/auth';
 import { useFetch } from '@/lib/hooks';
+import { RunListButton } from '@/components/RunList';
 import { money, num, qty, relative } from '@/lib/format';
 import {
   ActionCard,
@@ -59,6 +60,94 @@ function DashboardSkeleton({ stats = 4, cards = 2 }) {
           <CardSkeleton rows={5} />
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The saved orders, on the screen the day starts from.
+ *
+ * Refilling the main store is a monthly job, and a monthly job that lives two
+ * clicks away is a monthly job somebody forgets. Anything not run in the last
+ * four weeks is called out as due, so the reminder and the button that
+ * answers it are the same thing.
+ */
+function StandardListsPanel({ router }) {
+  const { data, loading, reload } = useFetch('/standard-lists');
+  const lists = data?.data ?? [];
+
+  if (loading || lists.length === 0) return null;
+
+  const monthAgo = Date.now() - 28 * 24 * 60 * 60 * 1000;
+  const isDue = (list) => !list.last_used_at || new Date(list.last_used_at).getTime() < monthAgo;
+  const due = lists.filter(isDue);
+
+  return (
+    <div className="card mb-16">
+      <div className="card-head">
+        <h3>Standard lists</h3>
+        <div className="card-head-actions">
+          <Button onClick={() => router.push('/standard-lists')} icon="documents">
+            Manage lists
+          </Button>
+        </div>
+      </div>
+
+      {due.length > 0 && (
+        <Alert tone="warn" title={`${due.length} list${due.length === 1 ? '' : 's'} not run in the last four weeks`}>
+          Run one below to place the whole order at once, or open it first to change any amounts.
+        </Alert>
+      )}
+
+      <DataTable
+        rows={lists}
+        columns={[
+          {
+            key: 'name',
+            label: 'List',
+            render: (r) => (
+              <div>
+                <div className="cell-title">{r.name}</div>
+                <div className="cell-sub">
+                  {r.purpose === 'REFILL' ? 'Into the main store' : `To ${r.kitchen_name}`}
+                  {' · '}
+                  {r.total_items} items
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'last_used_at',
+            label: 'Last run',
+            render: (r) =>
+              r.last_used_at ? (
+                isDue(r) ? (
+                  <Badge tone="amber">{relative(r.last_used_at)}</Badge>
+                ) : (
+                  relative(r.last_used_at)
+                )
+              ) : (
+                <Badge tone="amber">Never run</Badge>
+              ),
+          },
+          {
+            key: 'actions',
+            label: '',
+            render: (r) => (
+              <div className="flex gap-4 nowrap">
+                <RunListButton list={r} onDone={reload} goToResult={false} />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => router.push(`/standard-lists/${r.id}`)}
+                >
+                  Open
+                </Button>
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -136,12 +225,20 @@ function AdminHome() {
               sub={waiting > 0 ? `${waiting} waiting for a decision` : 'Nothing waiting'}
             />
             <ActionCard
+              href="/standard-lists"
+              icon="documents"
+              title="Standard Lists"
+              sub="Place a whole order in one click"
+            />
+            <ActionCard
               href="/reports"
               icon="chart"
               title="See Reports"
               sub="Stock, usage and waste"
             />
           </div>
+
+          <StandardListsPanel router={router} />
 
           {/* --------------------------------------------------- key numbers */}
           <h2 style={{ fontSize: 'var(--text-xl)', margin: '28px 0 16px' }}>

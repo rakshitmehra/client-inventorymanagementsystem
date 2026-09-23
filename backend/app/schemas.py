@@ -358,6 +358,76 @@ class AdjustmentRequest(Schema):
 
 
 # ---------------------------------------------------------------------------
+# standard lists
+# ---------------------------------------------------------------------------
+class StandardListLine(Schema):
+    item_id: int
+    quantity: Quantity
+    unit_id: int | None = None
+    notes: str | None = Field(default=None, max_length=300)
+
+
+class StandardListSave(Schema):
+    """
+    Create or replace a standard list.
+
+    The lines are sent whole rather than patched one at a time. Editing a list
+    is a deliberate act - somebody sits down and revises what the kitchen
+    normally takes - so the screen holds the whole list and saves it in one
+    go, and there is no half-applied state to reason about.
+    """
+
+    name: str = Field(min_length=2, max_length=120)
+    purpose: Literal["REFILL", "DELIVERY"]
+    kitchen_id: int | None = None
+    supplier_id: int | None = None
+    notes: str | None = Field(default=None, max_length=500)
+    is_active: bool = True
+    items: list[StandardListLine] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def check_kitchen(self):
+        if self.purpose == "DELIVERY" and not self.kitchen_id:
+            raise ValueError("Choose which kitchen this list delivers to")
+        if self.purpose == "REFILL" and self.kitchen_id:
+            raise ValueError("A refill list fills the main store, so it has no kitchen")
+        return self
+
+    @model_validator(mode="after")
+    def check_no_repeats(self):
+        seen = {line.item_id for line in self.items}
+        if len(seen) != len(self.items):
+            raise ValueError("The same item appears twice - put it on one line")
+        return self
+
+
+class StandardListRunLine(Schema):
+    """One line of a run, where the quantity may differ from the saved one."""
+
+    item_id: int
+    quantity: NonNegative
+    unit_id: int | None = None
+
+
+class StandardListRun(Schema):
+    """
+    Run a standard list.
+
+    Send nothing and the saved quantities are used as they stand - that is the
+    single click. Send `items` and those quantities are used instead, which is
+    how somebody adds, drops or changes a line for this run only. A line set to
+    zero is left out of the run; the list itself is untouched either way.
+    """
+
+    items: list[StandardListRunLine] | None = None
+    notes: str | None = Field(default=None, max_length=500)
+    invoice_no: str | None = Field(default=None, max_length=60)
+    # Kitchen managers cannot move stock, so running a delivery list as a
+    # manager raises a request instead. Admins get the stock moved directly.
+    as_request: bool = False
+
+
+# ---------------------------------------------------------------------------
 # helpers used by the routers when shaping responses
 # ---------------------------------------------------------------------------
 def f(value: Any) -> float:

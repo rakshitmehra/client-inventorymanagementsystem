@@ -52,6 +52,7 @@ function navigationFor(user, isAdmin) {
       {
         section: 'Everyday jobs',
         items: [
+          { href: '/standard-lists', label: 'Standard Lists', icon: 'documents' },
           { href: '/goods-receipts/new', label: 'Receive Stock', icon: 'inbox' },
           { href: '/transfers/new', label: 'Send to a Kitchen', icon: 'truck' },
           { href: '/wastage', label: 'Record Waste', icon: 'trash' },
@@ -98,6 +99,7 @@ function navigationFor(user, isAdmin) {
     {
       section: 'Everyday jobs',
       items: [
+        { href: '/standard-lists', label: 'My Usual Order', icon: 'documents' },
         { href: '/requests/new', label: 'Ask for Stock', icon: 'request' },
         { href: '/production/new', label: 'Record Production', icon: 'cooking' },
         { href: '/wastage', label: 'Record Waste', icon: 'trash' },

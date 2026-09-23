@@ -30,6 +30,7 @@ from .routers import (
     records,
     reports,
     requests as requests_router,
+    standard_lists,
     transfers,
     users,
 )
@@ -116,6 +117,7 @@ for router in (
     main_inventory.router,
     transfers.router,
     requests_router.router,
+    standard_lists.router,
     products.router,
     production.router,
     records.router,

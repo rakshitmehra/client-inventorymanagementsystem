@@ -137,6 +137,22 @@ class AdjustmentReason(str, enum.Enum):
     OTHER = "OTHER"
 
 
+class ListPurpose(str, enum.Enum):
+    """
+    What a standard list is for, which decides what running it does.
+
+    REFILL buys stock into the main store, so running it writes a goods
+    receipt. DELIVERY sends stock out to one kitchen, so running it writes a
+    transfer. The two are kept apart because the quantities mean different
+    things - a month's purchasing is not a week's delivery - and because a
+    list pointed at the wrong end of the business would move stock the wrong
+    way.
+    """
+
+    REFILL = "REFILL"
+    DELIVERY = "DELIVERY"
+
+
 class RequestStatus(str, enum.Enum):
     """
     Lifecycle of a kitchen's request to the main store.
@@ -645,6 +661,98 @@ class StockRequestItem(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     request: Mapped[StockRequest] = relationship(back_populates="items")
+    item: Mapped[Item] = relationship()
+    unit: Mapped[Unit] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# standard lists
+# ---------------------------------------------------------------------------
+class StandardList(Base):
+    """
+    A saved list of items and quantities that gets used again and again.
+
+    The monthly refill of the main store is the same eighty lines every month,
+    and each kitchen takes roughly the same delivery every week. Typing that
+    in line by line is slow and it is where mistakes come from, so the list is
+    stored once and run whenever it is needed.
+
+    Running a list does not do anything new: it fills in the ordinary goods
+    receipt or transfer and hands it to the same service the manual screens
+    use. So a list cannot move stock in a way somebody could not have moved it
+    by hand, and everything it does lands in the ledger, the audit log and the
+    printed note exactly as usual. The list is a shortcut, never a side door.
+    """
+
+    __tablename__ = "standard_lists"
+    __table_args__ = (
+        CheckConstraint(_in("purpose", ListPurpose), name="ck_list_purpose"),
+        # A delivery has to know which kitchen it is for; a refill must not
+        # name one, because it is buying into the main store.
+        CheckConstraint(
+            "(purpose = 'DELIVERY' AND kitchen_id IS NOT NULL) "
+            "OR (purpose = 'REFILL' AND kitchen_id IS NULL)",
+            name="ck_list_kitchen_matches_purpose",
+        ),
+        UniqueConstraint("name", name="uq_standard_list_name"),
+        Index("ix_standard_list_purpose", "purpose"),
+        Index("ix_standard_list_kitchen", "kitchen_id"),
+    )
+
+    id: Mapped[int] = _pk("standard_lists")
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    kitchen_id: Mapped[int | None] = mapped_column(
+        IdType, ForeignKey("kitchens.id", ondelete="CASCADE")
+    )
+    supplier_id: Mapped[int | None] = mapped_column(
+        IdType, ForeignKey("suppliers.id", ondelete="SET NULL")
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    created_by: Mapped[int | None] = _fk("users.id", ondelete="SET NULL")
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = _now()
+    # Answers "did anyone actually run the refill this month?" without
+    # trawling the receipts.
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    kitchen: Mapped[Kitchen | None] = relationship()
+    supplier: Mapped[Supplier | None] = relationship()
+    creator: Mapped[User | None] = relationship()
+    items: Mapped[list[StandardListItem]] = relationship(
+        back_populates="standard_list",
+        cascade="all, delete-orphan",
+        order_by="StandardListItem.id",
+    )
+
+
+class StandardListItem(Base):
+    """
+    One line of a standard list: an item and how much of it normally goes.
+
+    The quantity is the usual amount, not a commitment. Whoever runs the list
+    can change any line or drop it for that run without touching the list
+    itself, which is the difference between "we normally take 20 kg" and "send
+    20 kg today".
+    """
+
+    __tablename__ = "standard_list_items"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_standard_list_item_quantity"),
+        UniqueConstraint("list_id", "item_id", name="uq_standard_list_item"),
+        Index("ix_standard_list_items_list", "list_id"),
+    )
+
+    id: Mapped[int] = _pk("standard_list_items")
+    list_id: Mapped[int] = _fk("standard_lists.id", ondelete="CASCADE")
+    item_id: Mapped[int] = _fk("items.id", ondelete="RESTRICT")
+    unit_id: Mapped[int] = _fk("units.id", ondelete="RESTRICT")
+    quantity: Mapped[Decimal] = mapped_column(Qty, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    standard_list: Mapped[StandardList] = relationship(back_populates="items")
     item: Mapped[Item] = relationship()
     unit: Mapped[Unit] = relationship()
 
