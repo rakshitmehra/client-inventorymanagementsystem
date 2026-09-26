@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { StandardListBar } from '@/components/StandardListBar';
+import { LoadedList } from '@/components/LoadedList';
 import AdminOnly from '@/components/AdminOnly';
 import { useAction, useFetch } from '@/lib/hooks';
 import { api } from '@/lib/api';
@@ -38,6 +40,32 @@ function NewGoodsReceipt() {
   const [receivedAt, setReceivedAt] = useState(isoDate());
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState([{ item_id: null, quantity: '', unit_id: null, unit_cost: '' }]);
+
+  /** The standard list these lines came from, if any. */
+  const [fromList, setFromList] = useState(null);
+
+  // Arriving from "Refill the main store" on the Main Store screen, with a
+  // list already chosen. Fetching it here rather than passing it through the
+  // URL keeps the link short and the data fresh.
+  const wantedList = useSearchParams().get('list');
+  const preset = useFetch(wantedList ? `/standard-lists/${wantedList}` : null, {
+    skip: !wantedList,
+  });
+
+  useEffect(() => {
+    const list = preset.data?.data;
+    if (!list?.items?.length) return;
+    setLines(
+      list.items.map((line) => ({
+        item_id: line.item_id,
+        quantity: String(line.quantity),
+        unit_id: line.unit_id,
+        unit_cost: line.unit_cost ? String(line.unit_cost) : '',
+      })),
+    );
+    if (list.supplier_id) setSupplierId(String(list.supplier_id));
+    setFromList(list);
+  }, [preset.data?.data?.id]);
   const [error, setError] = useState(null);
 
   const suppliers = useFetch('/suppliers');
@@ -51,6 +79,9 @@ function NewGoodsReceipt() {
     unit_id: i.unit_id,
     unit_code: i.unit_code,
     unit_cost: i.unit_cost,
+    // Carried through so the picker can be narrowed by category and searched
+    // by it. Dropping it here is what left the filter with nothing to offer.
+    category_name: i.category_name,
   }));
   const unitList = units.data?.data ?? [];
   const itemsById = Object.fromEntries(itemList.map((i) => [i.id, i]));
@@ -105,6 +136,37 @@ function NewGoodsReceipt() {
           <Alert tone="error">{error.message}</Alert>
         </div>
       )}
+
+      {/* The three shopping runs. Picking one fills the lines in below, which
+          is the difference between a hundred-line order taking a click and
+          taking an afternoon. */}
+      <StandardListBar
+        onPick={(list) => {
+          setLines(
+            (list.items ?? []).map((line) => ({
+              item_id: line.item_id,
+              quantity: String(line.quantity),
+              unit_id: line.unit_id,
+              unit_cost: line.unit_cost ? String(line.unit_cost) : '',
+            })),
+          );
+          if (list.supplier_id) setSupplierId(String(list.supplier_id));
+          setFromList(list);
+          toast.success(`Filled in ${list.items?.length ?? 0} items from '${list.name}'`);
+        }}
+      />
+
+      {/* Once a list has filled the form, changing a quantity here can be
+          taken back to the list itself - otherwise the same correction has to
+          be made twice, and the second one never happens. */}
+      <LoadedList
+        list={fromList}
+        lines={lines}
+        onCleared={() => {
+          setFromList(null);
+          setLines([{ item_id: null, quantity: '', unit_id: null, unit_cost: '' }]);
+        }}
+      />
 
       <div className="grid sidebar-right">
         <div className="card">

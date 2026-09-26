@@ -70,8 +70,12 @@ def visible_to(user: CurrentUser, record: StandardList) -> bool:
     """
     if user.is_admin:
         return True
-    if record.purpose != DELIVERY:
-        return False
+    if record.purpose == REFILL:
+        # A manager may look at the buying lists, because they are what says
+        # which items belong to the everyday run and which to the monthly one
+        # - a grouping their own request screen needs. They still cannot run
+        # one; that check lives in run_list and is not relaxed here.
+        return True
     return record.kitchen_id in (user.kitchen_ids or [])
 
 
@@ -117,6 +121,7 @@ def serialise(record: StandardList, *, db: Session | None = None) -> dict[str, A
         "id": record.id,
         "name": record.name,
         "purpose": record.purpose,
+        "frequency": record.frequency,
         "kitchen_id": record.kitchen_id,
         "kitchen_name": record.kitchen.name if record.kitchen else None,
         "supplier_id": record.supplier_id,
@@ -204,6 +209,7 @@ def create_list(db: Session, payload: Any, user: CurrentUser) -> dict[str, Any]:
     record = StandardList(
         name=data["name"].strip(),
         purpose=data["purpose"],
+        frequency=data.get("frequency") or "WEEKLY",
         kitchen_id=data.get("kitchen_id"),
         supplier_id=data.get("supplier_id"),
         notes=data.get("notes"),
@@ -234,6 +240,7 @@ def update_list(db: Session, list_id: int, payload: Any, user: CurrentUser) -> d
     before = len(record.items)
     record.name = data["name"].strip()
     record.purpose = data["purpose"]
+    record.frequency = data.get("frequency") or "WEEKLY"
     record.kitchen_id = data.get("kitchen_id")
     record.supplier_id = data.get("supplier_id")
     record.notes = data.get("notes")
@@ -375,9 +382,14 @@ def list_lists(db: Session, user: CurrentUser, *, include_inactive: bool = False
     if not include_inactive:
         query = query.where(StandardList.is_active.is_(True))
     if not user.is_admin:
+        # Their own kitchen's delivery lists, plus the buying lists, which
+        # they read only as a way of grouping items.
         query = query.where(
-            StandardList.purpose == DELIVERY,
-            StandardList.kitchen_id.in_(user.kitchen_ids or [-1]),
+            (StandardList.purpose == REFILL)
+            | (
+                (StandardList.purpose == DELIVERY)
+                & StandardList.kitchen_id.in_(user.kitchen_ids or [-1])
+            )
         )
     records = db.execute(query.order_by(StandardList.name)).scalars().all()
     return [serialise(r) for r in records]

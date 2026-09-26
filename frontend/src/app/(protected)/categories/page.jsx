@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Layout from '@/components/Layout';
+import { ConfirmButton } from '@/components/ConfirmButton';
 import AdminOnly from '@/components/AdminOnly';
 import { useAction, useClientTable, useFetch } from '@/lib/hooks';
 import { api } from '@/lib/api';
@@ -237,9 +238,21 @@ function CategoryForm({ category, onClose, onSaved, toast }) {
           <Button onClick={onClose} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={loading}>
-            {isNew ? 'Create' : 'Save changes'}
-          </Button>
+          {isNew ? (
+            <Button variant="primary" onClick={submit} loading={loading}>
+              {'Create'}
+            </Button>
+          ) : (
+            <ConfirmButton
+              variant="primary"
+              loading={loading}
+              onConfirm={submit}
+              title={`Save changes to ${category?.name ?? 'this category'}?`}
+              message="Category names appear on every item filed under them."
+            >
+              Save changes
+            </ConfirmButton>
+          )}
         </>
       }
     >

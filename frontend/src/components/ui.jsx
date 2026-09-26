@@ -44,7 +44,16 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div className="toast-stack" role="status" aria-live="polite">
+      {/* Rendered only when there is something to say. An empty fixed-position
+          container still takes part in layout, and on a phone it was sizing
+          itself from the scroll width while adding to it - a small feedback
+          loop that left every screen scrollable sideways by a few pixels. */}
+      <div
+        className="toast-stack"
+        role="status"
+        aria-live="polite"
+        hidden={toasts.length === 0}
+      >
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.tone}`}>
             <span className="toast-icon" aria-hidden="true">
@@ -73,8 +82,12 @@ export const useToast = () => {
 };
 
 /* ---------------------------------------------------------------- basics -- */
-export function Badge({ tone = 'gray', dot = false, children }) {
-  return <span className={`badge ${tone}${dot ? ' dot' : ''}`}>{children}</span>;
+export function Badge({ tone = 'gray', dot = false, className = '', children }) {
+  return (
+    <span className={`badge ${tone}${dot ? ' dot' : ''}${className ? ` ${className}` : ''}`}>
+      {children}
+    </span>
+  );
 }
 
 export function Spinner({ white = false }) {

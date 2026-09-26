@@ -40,6 +40,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from .config import settings
 from .database import Base
 
 # BIGSERIAL on CockroachDB/Postgres, plain INTEGER rowid on the SQLite fallback.
@@ -62,7 +63,17 @@ def _pk(table: str) -> Mapped[int]:
     The sequence is attached both as the column's generator and as its server
     default, so the database fills the id in whether the insert comes from the
     ORM or from plain SQL.
+
+    SQLite is the exception, and has to be. It has no sequences at all, and
+    SQLAlchemy refuses to render one for it - "Dialect 'sqlite' does not
+    support sequence increments" - which aborts create_all() and leaves the
+    documented local fallback with no tables. There it uses a plain
+    autoincrementing INTEGER primary key, which is SQLite's own rowid and
+    produces exactly the small ids this is all trying to preserve.
     """
+    if settings.is_sqlite:
+        return mapped_column(Integer, primary_key=True, autoincrement=True)
+
     # Bound to the metadata so create_all() emits every CREATE SEQUENCE before
     # the tables that reference them.
     sequence = Sequence(f"seq_{table}", metadata=Base.metadata)
@@ -151,6 +162,24 @@ class ListPurpose(str, enum.Enum):
 
     REFILL = "REFILL"
     DELIVERY = "DELIVERY"
+
+
+class ListFrequency(str, enum.Enum):
+    """
+    How often a list gets run, which is how the business already thinks about
+    buying.
+
+    The three are not a label on top of one list - they are three different
+    shopping trips. Everyday is the milk-and-vegetables run, and the things on
+    it spoil. Weekly is the grocery order, which keeps. Monthly is boxes and
+    bags, which are not food at all and are ordered by the carton. Keeping
+    them apart means somebody restocking the everyday run is not scrolling
+    past cake boxes to find the cream.
+    """
+
+    EVERYDAY = "EVERYDAY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
 
 
 class RequestStatus(str, enum.Enum):
@@ -687,6 +716,7 @@ class StandardList(Base):
     __tablename__ = "standard_lists"
     __table_args__ = (
         CheckConstraint(_in("purpose", ListPurpose), name="ck_list_purpose"),
+        CheckConstraint(_in("frequency", ListFrequency), name="ck_list_frequency"),
         # A delivery has to know which kitchen it is for; a refill must not
         # name one, because it is buying into the main store.
         CheckConstraint(
@@ -702,6 +732,9 @@ class StandardList(Base):
     id: Mapped[int] = _pk("standard_lists")
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: Everyday, weekly or monthly. Defaulted rather than nullable so lists
+    #: made before this existed sort somewhere sensible instead of nowhere.
+    frequency: Mapped[str] = mapped_column(String(16), default="WEEKLY", nullable=False)
     kitchen_id: Mapped[int | None] = mapped_column(
         IdType, ForeignKey("kitchens.id", ondelete="CASCADE")
     )

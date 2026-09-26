@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { DeliveryRhythm } from '@/components/DeliveryRhythm';
 import { useAuth } from '@/lib/auth';
 import { useFetch } from '@/lib/hooks';
 import { RunListButton } from '@/components/RunList';
@@ -250,7 +251,7 @@ function AdminHome() {
               tone="green"
               label="Stock in the main store"
               value={money(d.main_inventory.stock_value)}
-              meta={`${d.main_inventory.item_count} ingredients`}
+              meta={`${d.main_inventory.item_count} items`}
               onClick={() => router.push('/main-inventory')}
             />
             <Stat
@@ -274,7 +275,7 @@ function AdminHome() {
               tone="red"
               label="Waste this month"
               value={money(d.period.wastage_cost)}
-              meta={`${d.period.production_runs} production runs`}
+              meta="Across every kitchen"
               onClick={() => router.push('/wastage')}
             />
           </div>
@@ -360,7 +361,7 @@ function AdminHome() {
               <EmptyState
                 icon="check-circle"
                 title="Nothing is running low"
-                message="Every ingredient in the main store is above its minimum."
+                message="Every item in the main store is above its minimum."
               />
             ) : (
               <DataTable
@@ -370,7 +371,7 @@ function AdminHome() {
                 columns={[
                   {
                     key: 'item_name',
-                    label: 'Ingredient',
+                    label: 'Item',
                     render: (r) => <span className="cell-title">{r.item_name}</span>,
                   },
                   {
@@ -419,48 +420,41 @@ function KitchenHome() {
   if (!kitchenId) {
     return (
       <Layout title="Home">
-        <Alert tone="warn" title="You have not been given a kitchen yet">
-          Please ask your manager to add you to a kitchen. Once they do, you will be able to record
-          your production here.
+        <Alert tone="warn" title="No kitchen assigned">
+          Your account is not linked to a kitchen yet. Ask an administrator to assign you one.
         </Alert>
       </Layout>
     );
   }
 
-  const needsAttention = d ? d.stock.low_stock + d.stock.out_of_stock : 0;
+  const short = d ? d.low_stock.length : 0;
 
   return (
     <Layout
       title={user.kitchens[0].name}
       subtitle={`${greeting()}, ${user?.full_name?.split(' ')[0] ?? ''}`}
     >
-      {loading && <DashboardSkeleton stats={3} />}
+      {loading && <DashboardSkeleton stats={3} cards={1} />}
       {error && <Alert tone="error">{error.message}</Alert>}
 
       {d && (
         <>
-          <h2 style={{ fontSize: 'var(--text-xl)', marginBottom: 16 }}>
+          <h2 style={{ fontSize: 'var(--text-lg)', marginBottom: 12 }}>
             What would you like to do?
           </h2>
           <div className="action-row mb-16">
             <ActionCard
               primary
-              href="/production/new"
-              icon="cooking"
-              title="Record Production"
-              sub="Log what the kitchen produced"
-            />
-            <ActionCard
               href="/requests/new"
               icon="request"
               title="Ask for Stock"
-              sub="Request more from the main store"
+              sub="Tell the main store what you need"
             />
             <ActionCard
               href={`/kitchens/${kitchenId}/inventory`}
               icon="box"
-              title="Check My Stock"
-              sub="See what you have left"
+              title="My Stock"
+              sub="What is on your shelves"
             />
             <ActionCard
               href="/wastage"
@@ -468,124 +462,97 @@ function KitchenHome() {
               title="Record Waste"
               sub="Something spoiled or spilled"
             />
+            <ActionCard
+              href="/adjustments"
+              icon="adjust"
+              title="Correct a Count"
+              sub="Make the system match the shelf"
+            />
           </div>
 
-          <h2 style={{ fontSize: 'var(--text-xl)', margin: '28px 0 16px' }}>
+          {/* Counts and quantities only. What the business pays for any of it
+              is not a kitchen manager's concern. */}
+          <h2 style={{ fontSize: 'var(--text-lg)', margin: '20px 0 12px' }}>
             How your kitchen is doing
           </h2>
           <div className="grid cols-3 mb-16">
             <Stat
               icon="box"
               tone="green"
-              label="Stock you are holding"
-              value={money(d.stock.stock_value)}
-              meta={`${d.stock.item_count} ingredients`}
-              onClick={() => router.push(`/kitchens/${kitchenId}/inventory`)}
+              label="Items you hold"
+              value={num(d.stock.item_count)}
+              meta="In your kitchen"
             />
             <Stat
-              icon={needsAttention > 0 ? 'alert' : 'check-circle'}
-              tone={needsAttention > 0 ? 'amber' : 'green'}
+              icon="alert"
+              tone={short > 0 ? 'amber' : 'green'}
               label="Running low"
-              value={needsAttention > 0 ? num(needsAttention) : 'All good'}
-              meta={needsAttention > 0 ? 'Ask for more of these' : 'Nothing is short'}
-              onClick={() => router.push(`/kitchens/${kitchenId}/inventory?stock_status=low`)}
+              value={num(short)}
+              meta={short > 0 ? 'Ask for more of these' : 'Nothing is short'}
             />
             <Stat
-              icon="cooking"
-              tone="violet"
-              label="Made this month"
-              value={`${num(d.period.units_produced)} items`}
-              meta={`${d.period.production_runs} production runs`}
-              onClick={() => router.push('/production')}
+              icon="truck"
+              tone="blue"
+              label="Deliveries this month"
+              value={num(d.period.transfers_in ?? 0)}
+              meta="Sent to you from the main store"
             />
           </div>
 
-          <div className="grid cols-2">
-            <div className="card">
-              <div className="card-head">
-                <h3>Running low — ask for more</h3>
-              </div>
-              {d.low_stock.length === 0 ? (
-                <EmptyState
-                  icon="check-circle"
-                  title="You have everything you need"
-                  message="Nothing in your kitchen is below its minimum."
-                />
-              ) : (
-                <DataTable
-                  rows={d.low_stock.slice(0, 6)}
-                  rowKey={(r) => r.item_id}
-                  columns={[
-                    {
-                      key: 'item_name',
-                      label: 'Ingredient',
-                      render: (r) => <span className="cell-title">{r.item_name}</span>,
-                    },
-                    {
-                      key: 'quantity',
-                      label: 'You have',
-                      align: 'right',
-                      render: (r) => <strong>{qty(r.quantity, r.unit_code)}</strong>,
-                    },
-                    {
-                      key: 'status',
-                      label: '',
-                      render: (r) => (
-                        <Badge tone={r.stock_status === 'OUT' ? 'red' : 'amber'}>
-                          {r.stock_status === 'OUT' ? 'All gone' : 'Low'}
-                        </Badge>
-                      ),
-                    },
-                  ]}
-                />
-              )}
-            </div>
+          {/* Which of their items arrive daily, weekly and monthly, and what
+              is short on each. */}
+          <DeliveryRhythm kitchenId={kitchenId} />
 
-            <div className="card">
-              <div className="card-head">
-                <h3>Produced recently</h3>
-                <div className="card-head-actions">
-                  <Button onClick={() => router.push('/production')} icon="history">
-                    See all
-                  </Button>
-                </div>
+          <div className="card">
+            <div className="card-head">
+              <h3>Running low — ask for more</h3>
+              <div className="card-head-actions">
+                <Button onClick={() => router.push('/requests/new')} icon="request">
+                  Ask for stock
+                </Button>
               </div>
-              {d.recent_production.length === 0 ? (
-                <EmptyState
-                  icon="cooking"
-                  title="Nothing recorded yet"
-                  message="Use the Record Production button above after your first batch."
-                  action={
-                    <Button variant="primary" onClick={() => router.push('/production/new')}>
-                      Record Production
-                    </Button>
-                  }
-                />
-              ) : (
-                <DataTable
-                  rows={d.recent_production.slice(0, 6)}
-                  onRowClick={(r) => router.push(`/production/${r.id}`)}
-                  columns={[
-                    {
-                      key: 'product_name',
-                      label: 'What you made',
-                      render: (r) => (
-                        <div>
-                          <div className="cell-title">{r.product_name}</div>
-                          <div className="cell-sub">{relative(r.produced_at)}</div>
-                        </div>
-                      ),
-                    },
-                    {
-                      key: 'output_quantity',
-                      label: 'How many',
-                      align: 'right',
-                      render: (r) => <strong>{qty(r.output_quantity, r.unit_code)}</strong>,
-                    },
-                  ]}
-                />
-              )}
             </div>
+            {d.low_stock.length === 0 ? (
+              <EmptyState
+                icon="check-circle"
+                title="You have everything you need"
+                message="Nothing in your kitchen is below its minimum."
+              />
+            ) : (
+              <DataTable
+                rows={d.low_stock.slice(0, 8)}
+                rowKey={(r) => r.item_id}
+                onRowClick={() => router.push('/requests/new')}
+                columns={[
+                  {
+                    key: 'item_name',
+                    label: 'Item',
+                    render: (r) => (
+                      <div>
+                        <div className="cell-title">{r.item_name}</div>
+                        <div className="cell-sub mono">{r.sku}</div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'quantity',
+                    label: 'You have',
+                    align: 'right',
+                    render: (r) => <strong>{qty(r.quantity, r.unit_code)}</strong>,
+                  },
+                  {
+                    key: 'status',
+                    label: '',
+                    render: (r) =>
+                      Number(r.quantity) <= 0 ? (
+                        <Badge tone="red" dot>All gone</Badge>
+                      ) : (
+                        <Badge tone="amber" dot>Running low</Badge>
+                      ),
+                  },
+                ]}
+              />
+            )}
           </div>
         </>
       )}

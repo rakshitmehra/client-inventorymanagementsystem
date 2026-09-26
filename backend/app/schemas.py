@@ -379,6 +379,7 @@ class StandardListSave(Schema):
 
     name: str = Field(min_length=2, max_length=120)
     purpose: Literal["REFILL", "DELIVERY"]
+    frequency: Literal["EVERYDAY", "WEEKLY", "MONTHLY"] = "WEEKLY"
     kitchen_id: int | None = None
     supplier_id: int | None = None
     notes: str | None = Field(default=None, max_length=500)

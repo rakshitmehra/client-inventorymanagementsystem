@@ -52,7 +52,6 @@ export default function StandardListPage() {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState(null);
 
   useEffect(() => {
     if (list?.items) {
@@ -91,14 +90,13 @@ export default function StandardListPage() {
     : [];
 
   async function act(fn, done) {
-    setActionError(null);
     setBusy(true);
     try {
       const result = await fn();
       toast.success(result.message);
       done?.(result);
     } catch (err) {
-      setActionError(err.message);
+      toast.error(err.message);
     } finally {
       setBusy(false);
     }
@@ -187,7 +185,6 @@ export default function StandardListPage() {
         </>
       }
     >
-      {actionError && <Alert tone="error">{actionError}</Alert>}
 
       <div className="grid cols-4 mb-16">
         <div className="card">

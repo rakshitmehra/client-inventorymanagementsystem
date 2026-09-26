@@ -112,6 +112,21 @@ function PrintDocument() {
                 </>
               )}
               {doc.company.email && <> · {doc.company.email}</>}
+              {/* A food business in India has to show both on its paperwork.
+                  Rendered only when set, so an unconfigured system prints a
+                  clean document rather than an empty label. */}
+              {(doc.company.gstin || doc.company.fssai) && (
+                <>
+                  <br />
+                  {doc.company.gstin && (
+                    <span className="slip-reg">GSTIN: {doc.company.gstin}</span>
+                  )}
+                  {doc.company.gstin && doc.company.fssai && <> · </>}
+                  {doc.company.fssai && (
+                    <span className="slip-reg">FSSAI Lic. No: {doc.company.fssai}</span>
+                  )}
+                </>
+              )}
             </div>
           </div>
           <div className="slip-doc">

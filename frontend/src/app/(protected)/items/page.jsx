@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { ConfirmButton } from '@/components/ConfirmButton';
 import AdminOnly from '@/components/AdminOnly';
 import {
   FETCH_ALL,
@@ -13,7 +14,7 @@ import {
   useReference,
 } from '@/lib/hooks';
 import { api } from '@/lib/api';
-import { money, num, qty } from '@/lib/format';
+import { dateTime, money, num, qty, relative } from '@/lib/format';
 import {
   Alert,
   Badge,
@@ -42,6 +43,20 @@ export default function ItemsPage() {
   );
 }
 
+/**
+ * Where an item stands against its own minimum.
+ *
+ * An item with no minimum set can never be "low" - there is nothing to be low
+ * against - so it reads as OK rather than quietly joining the shortage list.
+ */
+function stockLevel(item) {
+  const total = Number(item.total_quantity ?? 0);
+  const min = Number(item.min_stock_level ?? 0);
+  if (total <= 0) return 'OUT';
+  if (min > 0 && total <= min) return 'LOW';
+  return 'OK';
+}
+
 function Items() {
   const router = useRouter();
   const toast = useToast();
@@ -58,6 +73,11 @@ function Items() {
   const { data, loading, error, reload } = useFetch(`/items?include_inactive=true&page_size=${FETCH_ALL}`);
   const suppliers = useFetch('/suppliers');
 
+  // Counted across the whole catalogue, not the current page.
+  const noMinimum = (data?.data ?? []).filter(
+    (i) => i.is_active && Number(i.min_stock_level ?? 0) <= 0,
+  ).length;
+
   const table = useClientTable(data?.data, {
     search: state.search ?? '',
     searchKeys: ['name', 'sku', 'description'],
@@ -67,7 +87,12 @@ function Items() {
       category_id: state.category_id ?? '',
       default_supplier_id: state.supplier_id ?? '',
     },
-    predicate: (row) => (state.include_inactive === 'true' ? true : row.is_active),
+    predicate: (row) => {
+      if (state.include_inactive !== 'true' && !row.is_active) return false;
+      if (!state.stock) return true;
+      const level = stockLevel(row);
+      return state.stock === 'SHORT' ? level !== 'OK' : level === state.stock;
+    },
     // The column is headed "Category" but the row field is category_name.
     sort: state.sort === 'category' ? 'category_name' : state.sort,
     order: state.order,
@@ -99,6 +124,17 @@ function Items() {
     >
       {error && <Alert tone="error">{error.message}</Alert>}
 
+      {/* Said once, where something can be done about it, rather than printed
+          on every one of the rows it is true for. An item with no minimum can
+          never be reported as running low, so this is the list of things the
+          low-stock warnings are currently blind to. */}
+      {noMinimum > 0 && (
+        <Alert tone="info" title={`${noMinimum} item${noMinimum === 1 ? ' has' : 's have'} no minimum level`}>
+          Without a minimum there is nothing to be low against, so these never appear in the
+          low-stock warnings. Set one when you edit the item.
+        </Alert>
+      )}
+
       <div className="card">
         <div className="card-head">
           <FilterBar
@@ -115,6 +151,16 @@ function Items() {
                   onChange={(e) => update({ supplier_id: e.target.value })}
                   placeholder="All suppliers"
                   options={(suppliers.data?.data ?? []).map((s) => ({ value: s.id, label: s.name }))}
+                />
+                <Select
+                  value={state.stock ?? ''}
+                  onChange={(e) => update({ stock: e.target.value })}
+                  options={[
+                    { value: '', label: 'Any stock level' },
+                    { value: 'SHORT', label: 'Low or out' },
+                    { value: 'OUT', label: 'All gone' },
+                    { value: 'OK', label: 'Plenty left' },
+                  ]}
                 />
                 <Select
                   value={state.include_inactive ?? ''}
@@ -137,6 +183,7 @@ function Items() {
 
         <DataTable
           loading={loading}
+          onRowClick={(r) => router.push(`/movements/item/${r.id}`)}
           sort={state.sort}
           order={state.order}
           onSort={setSort}
@@ -154,18 +201,12 @@ function Items() {
                   </div>
                   <div className="cell-sub">
                     <span className="mono">{r.sku}</span>
+                    {r.category_name ? ` · ${r.category_name}` : ''}
                     {r.is_perishable ? ' · perishable' : ''}
                   </div>
                 </div>
               ),
             },
-            {
-              key: 'category',
-              label: 'Category',
-              sortable: true,
-              render: (r) => <span className="muted">{r.category_name || '—'}</span>,
-            },
-            { key: 'unit', label: 'Unit', render: (r) => <Badge tone="gray">{r.unit_code}</Badge> },
             {
               key: 'main_quantity',
               label: 'In main',
@@ -181,16 +222,40 @@ function Items() {
             },
             {
               key: 'total_quantity',
-              label: 'Total',
+              label: 'Total held',
               align: 'right',
               sortable: true,
-              render: (r) => <strong>{qty(r.total_quantity, r.unit_code)}</strong>,
+              // The total and how it compares to the minimum are one fact, so
+              // they go in one cell. A bare "Min level" column left the reader
+              // to do the comparison in their head, 182 times.
+              render: (r) => {
+                const level = stockLevel(r);
+                return (
+                  <div className="stack-right">
+                    <strong>{qty(r.total_quantity, r.unit_code)}</strong>
+                    {level === 'OUT' ? (
+                      <Badge tone="red" dot>All gone</Badge>
+                    ) : level === 'LOW' ? (
+                      <Badge tone="amber" dot>Low</Badge>
+                    ) : r.min_stock_level > 0 ? (
+                      <span className="cell-sub">min {num(r.min_stock_level)}</span>
+                    ) : null}
+                  </div>
+                );
+              },
             },
             {
-              key: 'min_stock_level',
-              label: 'Min level',
-              align: 'right',
-              render: (r) => <span className="muted">{num(r.min_stock_level)}</span>,
+              key: 'created_at',
+              label: 'Added',
+              sortable: true,
+              render: (r) =>
+                r.created_at ? (
+                  <span className="cell-sub" title={dateTime(r.created_at)}>
+                    {relative(r.created_at)}
+                  </span>
+                ) : (
+                  <span className="muted">—</span>
+                ),
             },
             {
               key: 'unit_cost',
@@ -207,14 +272,21 @@ function Items() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => router.push(`/movements/item/${r.id}`)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditing(r);
+                    }}
                   >
-                    Ledger
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(r)}>
                     Edit
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setDeleting(r)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleting(r);
+                    }}
+                  >
                     Delete
                   </Button>
                 </div>
@@ -338,9 +410,21 @@ function ItemForm({ item, units, categories, suppliers, onClose, onSaved, toast 
           <Button onClick={onClose} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={loading}>
-            {isNew ? 'Add item' : 'Save changes'}
-          </Button>
+          {isNew ? (
+            <Button variant="primary" onClick={submit} loading={loading}>
+              Add item
+            </Button>
+          ) : (
+            <ConfirmButton
+              variant="primary"
+              loading={loading}
+              onConfirm={submit}
+              title={`Save changes to ${item?.name ?? 'this item'}?`}
+              message="The item is updated everywhere it appears, including on past documents that name it."
+            >
+              Save changes
+            </ConfirmButton>
+          )}
         </>
       }
     >

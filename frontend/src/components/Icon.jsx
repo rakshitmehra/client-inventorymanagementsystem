@@ -260,6 +260,8 @@ const P = {
   'arrow-down': <path d="M12 5v13.5M5.5 12 12 18.5l6.5-6.5" />,
   'chevron-up': <path d="m6 14.5 6-6 6 6" />,
   'chevron-down': <path d="m6 9.5 6 6 6-6" />,
+  'chevron-left': <path d="m14.5 6-6 6 6 6" />,
+  'chevron-right': <path d="m9.5 6 6 6-6 6" />,
 
   // ---------------------------------------------------------------- brand ---
   brand: (

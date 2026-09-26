@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { ConfirmButton } from '@/components/ConfirmButton';
 import { useAuth } from '@/lib/auth';
 import { useAction, useFetch } from '@/lib/hooks';
 import { api } from '@/lib/api';
@@ -160,11 +161,18 @@ export default function KitchensPage() {
                         <div className="avatar" style={{ width: 26, height: 26, fontSize: 11 }}>
                           {initials(manager.full_name)}
                         </div>
-                        <div style={{ minWidth: 0 }}>
+                        {/* flex:1 with min-width:0 lets this column give way,
+                            and the badge holds its own width, so a long email
+                            truncates instead of sliding under the badge. */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 550 }}>{manager.full_name}</div>
-                          <div className="cell-sub">{manager.email}</div>
+                          <div className="cell-sub truncate">{manager.email}</div>
                         </div>
-                        {manager.is_primary && <Badge tone="brand">Primary</Badge>}
+                        {manager.is_primary && (
+                          <Badge tone="brand" className="shrink-0">
+                            Primary
+                          </Badge>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -186,7 +194,10 @@ export default function KitchensPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      style={{ marginLeft: 'auto' }}
+                      // Pushed to the far end on a wide card; on a narrow one
+                      // the auto margin forced it onto a line of its own with
+                      // a gap above it, so a media query drops it.
+                      className="push-end"
                       onClick={() =>
                         kitchen.is_active ? setConfirm({ kitchen }) : toggleStatus(kitchen)
                       }
@@ -291,9 +302,21 @@ function KitchenForm({ kitchen, managers, onClose, onSaved, toast }) {
           <Button onClick={onClose} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={loading}>
-            {isNew ? 'Create kitchen' : 'Save changes'}
-          </Button>
+          {isNew ? (
+            <Button variant="primary" onClick={submit} loading={loading}>
+              {'Create kitchen'}
+            </Button>
+          ) : (
+            <ConfirmButton
+              variant="primary"
+              loading={loading}
+              onConfirm={submit}
+              title={`Save changes to ${kitchen?.name ?? 'this kitchen'}?`}
+              message="The kitchen is updated everywhere it appears, including on past delivery notes."
+            >
+              Save changes
+            </ConfirmButton>
+          )}
         </>
       }
     >

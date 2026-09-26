@@ -30,6 +30,29 @@ export function useAppFrame() {
   return useContext(AppFrameContext);
 }
 
+/** Remembered between visits, so the menu you shaped stays that shape. */
+const COLLAPSED_KEY = 'kitchenstock.sidebar.collapsed';
+const SECTIONS_KEY = 'kitchenstock.sidebar.sections';
+
+function readStored(key, fallback) {
+  // Private windows and cleared site data both make this throw or return
+  // nothing, and neither is a reason to fail to draw a menu.
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* a remembered preference is not worth an error */
+  }
+}
+
 /**
  * Navigation is built from the signed-in role, and deliberately uses everyday
  * words rather than warehouse jargon ("Send to a Kitchen", not "Transfers
@@ -39,42 +62,44 @@ function navigationFor(user, isAdmin) {
   if (isAdmin) {
     return [
       {
-        // Same reasoning as the kitchen menu below: the two screens an
-        // administrator opens most - what the main store is holding, and what
-        // the kitchens are waiting on them for - sit above any heading.
+        // Where the stock is. These four answer "what have we got, and who
+        // is waiting on me", which is what the day starts with.
         section: null,
         items: [
           { href: '/dashboard', label: 'Home', icon: 'home' },
           { href: '/main-inventory', label: 'Main Store', icon: 'box' },
-          { href: '/requests', label: 'Stock Requests', icon: 'request' },
+          { href: '/kitchen-stock', label: 'Kitchen Stock', icon: 'kitchen' },
         ],
       },
       {
-        section: 'Everyday jobs',
+        section: 'Move stock',
         items: [
-          { href: '/standard-lists', label: 'Standard Lists', icon: 'documents' },
+          // One entry for the whole business of getting stock where it is
+          // needed. Requests, the saved orders, sending to a kitchen and the
+          // record of past deliveries are tabs across the top of that
+          // section, not four separate places to remember.
+          { href: '/requests', label: 'Stock', icon: 'request' },
           { href: '/goods-receipts/new', label: 'Receive Stock', icon: 'inbox' },
-          { href: '/transfers/new', label: 'Send to a Kitchen', icon: 'truck' },
           { href: '/wastage', label: 'Record Waste', icon: 'trash' },
           { href: '/adjustments', label: 'Correct a Count', icon: 'adjust' },
         ],
       },
       {
-        section: 'Look things up',
+        section: 'History & reports',
         items: [
-          { href: '/kitchens', label: 'Kitchens', icon: 'kitchen' },
-          { href: '/transfers', label: 'Past Deliveries', icon: 'documents' },
           { href: '/movements', label: 'Stock History', icon: 'clock' },
           { href: '/reports', label: 'Reports', icon: 'chart' },
         ],
       },
       {
+        // Things you set up once and rarely touch. Folded away by default
+        // would be better still, and the section folds if they want that.
         section: 'Set-up',
         items: [
-          { href: '/items', label: 'Ingredients', icon: 'ingredient' },
-          { href: '/products', label: 'Recipes', icon: 'recipe' },
-          { href: '/categories', label: 'Categories', icon: 'tag' },
+          { href: '/items', label: 'Items', icon: 'ingredient' },
+          { href: '/kitchens', label: 'Kitchens', icon: 'kitchen' },
           { href: '/suppliers', label: 'Suppliers', icon: 'supplier' },
+          { href: '/categories', label: 'Categories', icon: 'tag' },
           { href: '/users', label: 'People', icon: 'users' },
         ],
       },
@@ -84,24 +109,22 @@ function navigationFor(user, isAdmin) {
   const kitchenId = user?.kitchens?.[0]?.id;
   return [
     {
-      // The two things a kitchen manager opens most - what have I got, and
-      // what is on its way - sit at the very top, above the fold on a phone,
-      // rather than buried under a heading further down.
+      // A kitchen manager has three jobs: see what they have, ask for more,
+      // and say what went wrong. Everything else was somebody else's screen.
       section: null,
       items: [
         { href: '/dashboard', label: 'Home', icon: 'home' },
         ...(kitchenId
           ? [{ href: `/kitchens/${kitchenId}/inventory`, label: 'My Stock', icon: 'box' }]
           : []),
-        { href: '/transfers', label: 'Deliveries to Me', icon: 'truck' },
+        // Same idea as the administrator's menu: asking, the requests you
+        // have asked, and what has arrived are one section with tabs.
+        { href: '/requests/new', label: 'Stock', icon: 'request' },
       ],
     },
     {
-      section: 'Everyday jobs',
+      section: 'Record',
       items: [
-        { href: '/standard-lists', label: 'My Usual Order', icon: 'documents' },
-        { href: '/requests/new', label: 'Ask for Stock', icon: 'request' },
-        { href: '/production/new', label: 'Record Production', icon: 'cooking' },
         { href: '/wastage', label: 'Record Waste', icon: 'trash' },
         { href: '/adjustments', label: 'Correct a Count', icon: 'adjust' },
       ],
@@ -109,11 +132,7 @@ function navigationFor(user, isAdmin) {
     {
       section: 'Look things up',
       items: [
-        { href: '/requests', label: 'My Requests', icon: 'documents' },
-        { href: '/production', label: 'Production History', icon: 'history' },
-        { href: '/products', label: 'Recipes', icon: 'recipe' },
         { href: '/movements', label: 'Stock History', icon: 'clock' },
-        { href: '/reports', label: 'Reports', icon: 'chart' },
       ],
     },
   ];
@@ -122,8 +141,17 @@ function navigationFor(user, isAdmin) {
 export default function AppFrame({ children }) {
   const { user, isAdmin, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [shut, setShut] = useState({});
   const pathname = usePathname();
   const router = useRouter();
+
+  // Read the remembered state after mount. Reading it during the first render
+  // would make the server's markup and the browser's disagree.
+  useEffect(() => {
+    setCollapsed(readStored(COLLAPSED_KEY, false));
+    setShut(readStored(SECTIONS_KEY, {}));
+  }, []);
 
   // Close the drawer when the route changes, so tapping a link on a phone
   // does not leave the menu covering the page you just asked for.
@@ -136,60 +164,107 @@ export default function AppFrame({ children }) {
   // "/transfers/new" should not also light up "/transfers".
   const isActive = (href) => pathname === href;
 
+  function toggleSection(name) {
+    setShut((current) => {
+      const next = { ...current, [name]: !current[name] };
+      writeStored(SECTIONS_KEY, next);
+      return next;
+    });
+  }
+
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      writeStored(COLLAPSED_KEY, !current);
+      return !current;
+    });
+  }
+
   return (
     <AppFrameContext.Provider value={{ open, setOpen }}>
-      <div className="app">
+      <div className={`app${collapsed ? ' sidebar-collapsed' : ''}`}>
         {open && <div className="sidebar-scrim" onClick={() => setOpen(false)} />}
 
         <aside className={`sidebar${open ? ' open' : ''}`}>
           <div className="sidebar-brand">
             <div className="sidebar-logo">
-              <Icon name="brand" size={26} />
+              <Icon name="brand" size={22} />
             </div>
             <div className="sidebar-brand-text">
               <div className="sidebar-brand-name">KitchenStock</div>
               <div className="sidebar-brand-sub">
-                {/* "Manager view" meant manager-of-everything, but next to a
-                    role literally called Kitchen Manager it read as the
-                    opposite of what an administrator is. Say which it is. */}
                 {isAdmin ? 'Administrator' : user?.kitchens?.[0]?.name ?? 'Kitchen view'}
               </div>
             </div>
+
+            {/* Narrows the menu to icons on a desktop. On a phone the same
+                corner needs to dismiss the drawer instead, which is a
+                different job, so they are two buttons rather than one that
+                changes meaning with the screen width. */}
+            <button
+              type="button"
+              className="sidebar-collapse desktop-only"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? 'Widen the menu' : 'Narrow the menu'}
+              title={collapsed ? 'Widen the menu' : 'Narrow the menu'}
+            >
+              <Icon name={collapsed ? 'chevron-right' : 'chevron-left'} size={18} />
+            </button>
+
             <button
               type="button"
               className="sidebar-close mobile-only"
               onClick={() => setOpen(false)}
               aria-label="Close the menu"
             >
-              <Icon name="close" size={22} />
+              <Icon name="close" size={20} />
             </button>
           </div>
 
           <nav className="sidebar-nav" aria-label="Main menu">
-            {groups.map((group, index) => (
-              <div key={group.section ?? index}>
-                {group.section && <div className="nav-section">{group.section}</div>}
-                {group.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`nav-item${isActive(item.href) ? ' active' : ''}`}
-                    aria-current={isActive(item.href) ? 'page' : undefined}
-                  >
-                    <span className="nav-item-icon" aria-hidden="true">
-                      <Icon name={item.icon} size={21} />
-                    </span>
-                    <span>{item.label}</span>
-                  </Link>
-                ))}
-              </div>
-            ))}
+            {groups.map((group, index) => {
+              const folded = !!group.section && !!shut[group.section];
+              return (
+                <div key={group.section ?? index} className="nav-group">
+                  {group.section && (
+                    <button
+                      type="button"
+                      className={`nav-section${folded ? ' folded' : ''}`}
+                      onClick={() => toggleSection(group.section)}
+                      aria-expanded={!folded}
+                    >
+                      <span className="nav-section-label">{group.section}</span>
+                      <Icon name={folded ? 'chevron-right' : 'chevron-down'} size={15} />
+                    </button>
+                  )}
+
+                  {/* A folded section keeps its links in the document so the
+                      collapsed rail can still show them as icons - only the
+                      full-width list is hidden. */}
+                  <div className={`nav-links${folded ? ' folded' : ''}`}>
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`nav-item${isActive(item.href) ? ' active' : ''}`}
+                        aria-current={isActive(item.href) ? 'page' : undefined}
+                        title={item.label}
+                      >
+                        <span className="nav-item-icon" aria-hidden="true">
+                          <Icon name={item.icon} size={19} />
+                        </span>
+                        <span className="nav-item-label">{item.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </nav>
 
           <div className="sidebar-footer">
             <div className="sidebar-user">
               <div className="avatar">{initials(user?.full_name)}</div>
-              <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ minWidth: 0, flex: 1 }} className="sidebar-user-text">
                 <div className="sidebar-user-name">{user?.full_name}</div>
                 <div className="sidebar-user-role">
                   {isAdmin ? 'Sees every kitchen' : 'Sees one kitchen'}

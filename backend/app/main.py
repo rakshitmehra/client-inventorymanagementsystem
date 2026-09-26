@@ -1,9 +1,11 @@
+import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -25,8 +27,6 @@ from .routers import (
     kitchens,
     main_inventory,
     movements,
-    production,
-    products,
     records,
     reports,
     requests as requests_router,
@@ -34,6 +34,9 @@ from .routers import (
     transfers,
     users,
 )
+from .models import RoleCode
+from .pricing import strip_money
+from .security import decode_access_token
 from .seed import ensure_seed
 
 logging.basicConfig(
@@ -84,6 +87,61 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def hide_money_from_managers(request, call_next):
+    """
+    Strip every cost and value from responses sent to a kitchen manager.
+
+    Done here, once, rather than in each serialiser. A rule spread across
+    forty response builders is one that gets missed on the forty-first, and
+    the way it fails is silent - a price simply shows up on a screen that
+    should not have one. One gate on the way out cannot be forgotten, and it
+    covers endpoints written after it without anybody remembering to.
+
+    The role comes from the signed token, so this costs no database work. A
+    token that is missing, expired or unreadable is left alone: this is not
+    the authentication check, and pretending otherwise here would produce a
+    second, subtly different answer to "who is this" for the real check to
+    disagree with.
+    """
+    response = await call_next(request)
+
+    auth = request.headers.get("authorization", "")
+    if not auth.lower().startswith("bearer "):
+        return response
+    try:
+        claims = decode_access_token(auth.split(" ", 1)[1].strip())
+    except Exception:  # noqa: BLE001 - the real check will reject it properly
+        return response
+    if claims.get("role") == RoleCode.ADMIN.value:
+        return response
+
+    if not response.headers.get("content-type", "").startswith("application/json"):
+        return response
+
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    try:
+        cleaned = strip_money(json.loads(body))
+    except (ValueError, TypeError):
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type=response.media_type,
+        )
+
+    payload = json.dumps(cleaned, default=str).encode()
+    headers = dict(response.headers)
+    # The body just changed length; a stale Content-Length truncates it.
+    headers.pop("content-length", None)
+    return Response(
+        content=payload,
+        status_code=response.status_code,
+        headers=headers,
+        media_type="application/json",
+    )
+
+
 app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(IntegrityError, integrity_error_handler)
@@ -118,8 +176,6 @@ for router in (
     transfers.router,
     requests_router.router,
     standard_lists.router,
-    products.router,
-    production.router,
     records.router,
     movements.router,
     reports.router,

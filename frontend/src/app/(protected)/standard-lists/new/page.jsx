@@ -51,13 +51,11 @@ function NewStandardList() {
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState([{ item_id: null, quantity: '', unit_id: null }]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
 
   const ready = toPayloadLines(lines);
   const complete = name.trim().length >= 2 && ready.length > 0 && (purpose === 'REFILL' || kitchenId);
 
   async function submit() {
-    setError(null);
     setSaving(true);
     try {
       const result = await api.post('/standard-lists', {
@@ -71,7 +69,7 @@ function NewStandardList() {
       toast.success(result.message);
       router.push(`/standard-lists/${result.data.id}`);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setSaving(false);
     }
   }
@@ -86,7 +84,6 @@ function NewStandardList() {
         </Button>
       }
     >
-      {error && <Alert tone="error">{error}</Alert>}
 
       <div className="card mb-16">
         <div className="card-body">

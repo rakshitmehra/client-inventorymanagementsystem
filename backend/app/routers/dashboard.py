@@ -27,12 +27,13 @@ from ..models import (
     User,
     WastageRecord,
 )
+from ..sqlfuncs import greatest
 from ..schemas import dt, f
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 MAIN_QTY = func.coalesce(MainInventory.quantity, Decimal("0"))
-EFFECTIVE_MIN = func.greatest(KitchenInventory.min_stock_level, Item.min_stock_level)
+EFFECTIVE_MIN = greatest(KitchenInventory.min_stock_level, Item.min_stock_level)
 
 
 def _since(days: int) -> datetime:

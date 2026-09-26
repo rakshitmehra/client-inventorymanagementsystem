@@ -26,6 +26,7 @@ from ..models import (
     Unit,
     User,
 )
+from ..sqlfuncs import greatest
 from ..schemas import (
     AssignManagerRequest,
     KitchenCreate,
@@ -42,7 +43,7 @@ router = APIRouter(prefix="/kitchens", tags=["kitchens"])
 
 # The effective minimum is the higher of the kitchen override and the catalogue
 # default, so a kitchen can be stricter than the item but never looser.
-EFFECTIVE_MIN = func.greatest(KitchenInventory.min_stock_level, Item.min_stock_level)
+EFFECTIVE_MIN = greatest(KitchenInventory.min_stock_level, Item.min_stock_level)
 
 
 def _managers_of(db, kitchen_id: int) -> list[dict]:

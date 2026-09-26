@@ -3,6 +3,9 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { StockTabs } from '@/components/StockTabs';
+import { StandardListBar } from '@/components/StandardListBar';
+import { LoadedList } from '@/components/LoadedList';
 import AdminOnly from '@/components/AdminOnly';
 import { useAction, useFetch } from '@/lib/hooks';
 import { api } from '@/lib/api';
@@ -52,6 +55,9 @@ function NewTransfer() {
   const [notes, setNotes] = useState('');
   const [showNotes, setShowNotes] = useState(false);
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
+
+  /** The standard list these lines came from, if any. */
+  const [fromList, setFromList] = useState(null);
   const [error, setError] = useState(null);
   const [confirming, setConfirming] = useState(false);
 
@@ -85,6 +91,8 @@ function NewTransfer() {
     unit_id: i.unit_id,
     unit_code: i.unit_code,
     unit_cost: i.unit_cost,
+    // Needed by the picker's category filter and its search.
+    category_name: i.category_name,
   }));
   const unitList = units.data?.data ?? [];
   const activeKitchens = (kitchens.data?.data ?? []).filter((k) => k.is_active);
@@ -170,6 +178,35 @@ function NewTransfer() {
 
       <div style={{ maxWidth: 940 }}>
         {/* ---------------------------------------------- step 1: where to -- */}
+        <StockTabs />
+
+        {/* The same three runs the buying uses. A kitchen's delivery is
+            usually a subset of them, so starting from one beats picking
+            fifty items out of a hundred and eighty by hand. Costs are not
+            part of a transfer, so only the items and amounts come across. */}
+        <StandardListBar
+          title="Start from a standard list"
+          onPick={(list) => {
+            setLines(
+              (list.items ?? []).map((line) => ({
+                item_id: line.item_id,
+                quantity: String(line.quantity),
+                unit_id: line.unit_id,
+              })),
+            );
+            setFromList(list);
+            toast.success(`Filled in ${list.items?.length ?? 0} items from '${list.name}'`);
+          }}
+        />
+
+        <LoadedList
+          list={fromList}
+          lines={lines}
+          onCleared={() => {
+            setFromList(null);
+            setLines([{ ...EMPTY_LINE }]);
+          }}
+        />
         <div className="card mb-16">
           <div className="card-body">
             <Step number="1" title="Which kitchen?" />

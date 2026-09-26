@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Layout from '@/components/Layout';
+import { ConfirmButton } from '@/components/ConfirmButton';
 import AdminOnly from '@/components/AdminOnly';
 import { useAuth } from '@/lib/auth';
 import { FETCH_ALL, useAction, useClientTable, useFetch } from '@/lib/hooks';
@@ -341,9 +342,21 @@ function UserForm({ user, roles, kitchens, onClose, onSaved, toast }) {
           <Button onClick={onClose} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={loading}>
-            {isNew ? 'Create account' : 'Save changes'}
-          </Button>
+          {isNew ? (
+            <Button variant="primary" onClick={submit} loading={loading}>
+              {'Create account'}
+            </Button>
+          ) : (
+            <ConfirmButton
+              variant="primary"
+              loading={loading}
+              onConfirm={submit}
+              title={`Save changes to ${user?.full_name ?? 'this account'}?`}
+              message="This changes what this person can reach and which kitchens they run."
+            >
+              Save changes
+            </ConfirmButton>
+          )}
         </>
       }
     >

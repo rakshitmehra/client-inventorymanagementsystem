@@ -96,6 +96,10 @@ SETTINGS = [
     ("company_phone", "+91 20 4000 1200"),
     ("company_email", "operations@goldencrust.example"),
     ("company_currency", "INR"),
+    # Printed on every note and invoice. A food business in India has to show
+    # both, and a delivery note without them is not much use as a document.
+    ("company_gstin", "27AABCG1234M1Z5"),
+    ("company_fssai", "11522998000123"),
 ]
 
 ADMIN_DEFAULTS = {
@@ -863,10 +867,16 @@ def create_schema() -> None:
     The sequences are issued explicitly rather than left to create_all(): the
     columns carry ``DEFAULT nextval(...)``, so the sequence has to exist before
     the table that references it.
+
+    SQLite is the exception. It has no CREATE SEQUENCE at all, and does not
+    need one - an INTEGER PRIMARY KEY is its own rowid. Issuing them anyway is
+    what broke the documented SQLite fallback: the statement raised, the whole
+    schema step aborted, and the first query then failed with "no such table".
     """
-    with engine.begin() as connection:
-        for name in _primary_key_sequences():
-            connection.execute(text(f'CREATE SEQUENCE IF NOT EXISTS "{name}"'))
+    if not settings.is_sqlite:
+        with engine.begin() as connection:
+            for name in _primary_key_sequences():
+                connection.execute(text(f'CREATE SEQUENCE IF NOT EXISTS "{name}"'))
     Base.metadata.create_all(engine)
 
 

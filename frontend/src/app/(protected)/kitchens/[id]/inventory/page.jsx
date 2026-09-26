@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { ConfirmButton } from '@/components/ConfirmButton';
 import { useAuth } from '@/lib/auth';
 import {
   FETCH_ALL,
@@ -125,7 +126,9 @@ function KitchenInventory() {
       {error && <Alert tone="error">{error.message}</Alert>}
 
       <div className="grid cols-4 mb-16">
-        <Stat icon="rupee" tone="green" label="Stock value" value={money(data?.meta?.stock_value ?? 0)} />
+        {isAdmin && (
+          <Stat icon="rupee" tone="green" label="Stock value" value={money(data?.meta?.stock_value ?? 0)} />
+        )}
         <Stat icon="ingredient" tone="blue" label="Items held" value={num(data?.meta?.total ?? 0)} />
         <Stat
           icon="alert"
@@ -236,13 +239,17 @@ function KitchenInventory() {
                 );
               },
             },
-            {
-              key: 'value',
-              label: 'Value',
-              align: 'right',
-              sortable: true,
-              render: (r) => money(r.stock_value),
-            },
+            ...(isAdmin
+              ? [
+                  {
+                    key: 'value',
+                    label: 'Value',
+                    align: 'right',
+                    sortable: true,
+                    render: (r) => money(r.stock_value),
+                  },
+                ]
+              : []),
             {
               key: 'updated_at',
               label: 'Last movement',
@@ -308,9 +315,16 @@ function KitchenInventory() {
         footer={
           <>
             <Button onClick={() => setEditing(null)}>Cancel</Button>
-            <Button variant="primary" onClick={saveMinLevel} loading={saving}>
+            <ConfirmButton
+              variant="primary"
+              loading={saving}
+              onConfirm={saveMinLevel}
+              title={`Change the minimum for ${editing?.item_name ?? 'this item'}?`}
+              message="This is the level that decides when the item is reported as running low in this kitchen."
+              confirmLabel="Save level"
+            >
               Save level
-            </Button>
+            </ConfirmButton>
           </>
         }
       >

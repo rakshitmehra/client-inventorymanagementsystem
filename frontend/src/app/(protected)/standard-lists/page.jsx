@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { StockTabs } from '@/components/StockTabs';
 import { useAuth } from '@/lib/auth';
 import { useClientTable, useFetch } from '@/lib/hooks';
 import { dateTime, money, num } from '@/lib/format';
@@ -58,6 +59,7 @@ export default function StandardListsPage() {
         )
       }
     >
+      <StockTabs />
       {error && <Alert tone="error">{error.message}</Alert>}
 
       <div className="card">

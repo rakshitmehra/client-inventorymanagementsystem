@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { StockTabs } from '@/components/StockTabs';
 import { useAuth } from '@/lib/auth';
 import { FETCH_ALL, useClientTable, useFetch, useListState } from '@/lib/hooks';
 import { dateTime, isoDate, money, num } from '@/lib/format';
@@ -70,6 +71,7 @@ export default function TransfersPage() {
         )
       }
     >
+      <StockTabs />
       {error && <Alert tone="error">{error.message}</Alert>}
 
       <div className="card">
@@ -147,12 +149,16 @@ export default function TransfersPage() {
               ),
             },
             { key: 'total_items', label: 'Items', align: 'right', render: (r) => num(r.total_items) },
-            {
-              key: 'total_cost',
-              label: 'Value',
-              align: 'right',
-              render: (r) => money(r.total_cost),
-            },
+            ...(isAdmin
+              ? [
+                  {
+                    key: 'total_cost',
+                    label: 'Value',
+                    align: 'right',
+                    render: (r) => money(r.total_cost),
+                  },
+                ]
+              : []),
             {
               key: 'created_by_name',
               label: 'Transferred by',

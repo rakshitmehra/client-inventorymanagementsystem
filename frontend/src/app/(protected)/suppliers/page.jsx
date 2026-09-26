@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Layout from '@/components/Layout';
+import { ConfirmButton } from '@/components/ConfirmButton';
 import AdminOnly from '@/components/AdminOnly';
 import { FETCH_ALL, useAction, useClientTable, useFetch } from '@/lib/hooks';
 import { api } from '@/lib/api';
@@ -265,9 +266,21 @@ function SupplierForm({ supplier, onClose, onSaved, toast }) {
           <Button onClick={onClose} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={loading}>
-            {isNew ? 'Add supplier' : 'Save changes'}
-          </Button>
+          {isNew ? (
+            <Button variant="primary" onClick={submit} loading={loading}>
+              {'Add supplier'}
+            </Button>
+          ) : (
+            <ConfirmButton
+              variant="primary"
+              loading={loading}
+              onConfirm={submit}
+              title={`Save changes to ${supplier?.name ?? 'this supplier'}?`}
+              message="The supplier is updated on every goods receipt that names them."
+            >
+              Save changes
+            </ConfirmButton>
+          )}
         </>
       }
     >

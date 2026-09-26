@@ -28,6 +28,7 @@ from ..models import (
     User,
     WastageRecord,
 )
+from ..sqlfuncs import greatest
 from ..schemas import dt, f
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -38,7 +39,7 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 ZERO = Decimal("0")
 
 MAIN_QTY = func.coalesce(MainInventory.quantity, Decimal("0"))
-EFFECTIVE_MIN = func.greatest(KitchenInventory.min_stock_level, Item.min_stock_level)
+EFFECTIVE_MIN = greatest(KitchenInventory.min_stock_level, Item.min_stock_level)
 
 
 def _window(from_: str | None, to: str | None) -> tuple[str, str]:
@@ -209,91 +210,128 @@ def kitchen_stock(db: DbSession, user: CurrentUserDep, kitchen_id: int | None = 
     }
 
 
-# ------------------------------------------------------ item consumption ----
-@router.get("/consumption")
-def consumption(
+# ------------------------------------------------------ kitchen activity ----
+@router.get("/kitchen-activity")
+def kitchen_activity(
     db: DbSession,
     user: CurrentUserDep,
-    from_: Annotated[str | None, Query(alias="from")] = None,
-    to: str | None = None,
     kitchen_id: int | None = None,
-    item_id: int | None = None,
-    category_id: int | None = None,
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = None,
 ):
+    """
+    One line per item per kitchen: what was sent, what was used, what is left.
+
+    The three questions a kitchen gets asked - how much did we send them, what
+    did they do with it, and what are they about to run out of - are answered
+    on three different screens today: the transfer list, the production and
+    wastage records, and the stock page. Nobody can hold all three side by
+    side, so this puts them on one row.
+
+    Sent, used and wasted are counted over the chosen window and come from the
+    stock ledger, which is the same record the item history is drawn from.
+    "In stock" is deliberately not windowed - it is what is on the shelf right
+    now, because a level that was true three weeks ago is not a thing anyone
+    can act on.
+    """
     start, end = _window(from_, to)
-    filters, allowed = _kitchen_filter(user, ConsumptionRecord.kitchen_id, kitchen_id)
+    filters, allowed = _kitchen_filter(user, KitchenInventory.kitchen_id, kitchen_id)
     if not allowed:
-        return {"data": [], "by_kitchen": [], "meta": {"from": start, "to": end, "total_cost": 0.0}}
+        return {"data": [], "meta": _empty_activity_meta(start, end)}
 
-    filters.append(func.date(ConsumptionRecord.created_at).between(as_date(start), as_date(end)))
-    if item_id:
-        filters.append(ConsumptionRecord.item_id == item_id)
-    if category_id:
-        filters.append(Item.category_id == category_id)
-
-    rows = db.execute(
-        select(
-            Item.id,
-            Item.sku,
-            Item.name,
-            Unit.code,
-            Category.name,
-            func.sum(ConsumptionRecord.consumed_quantity).label("total_consumed"),
-            func.sum(ConsumptionRecord.total_cost).label("total_cost"),
-            func.count(func.distinct(ConsumptionRecord.production_id)).label("runs"),
-            func.count(func.distinct(ConsumptionRecord.kitchen_id)).label("kitchens"),
-        )
-        .join(Item, Item.id == ConsumptionRecord.item_id)
+    # Everything a kitchen holds, with the level that counts as low for it.
+    stock_rows = db.execute(
+        select(Kitchen, Item, KitchenInventory.quantity, Unit.code, Category.name, EFFECTIVE_MIN)
+        .select_from(KitchenInventory)
+        .join(Kitchen, Kitchen.id == KitchenInventory.kitchen_id)
+        .join(Item, Item.id == KitchenInventory.item_id)
         .join(Unit, Unit.id == Item.unit_id)
         .outerjoin(Category, Category.id == Item.category_id)
         .where(*filters)
-        .group_by(Item.id, Item.sku, Item.name, Unit.code, Category.name)
-        .order_by(func.sum(ConsumptionRecord.consumed_quantity).desc())
+        .order_by(Kitchen.name, Item.name)
     ).all()
 
-    by_kitchen = db.execute(
+    # The ledger, folded down to a total per kitchen, item and movement type.
+    move_filters, _ = _kitchen_filter(user, StockMovement.kitchen_id, kitchen_id)
+    moved = db.execute(
         select(
-            Kitchen.id,
-            Kitchen.name,
-            func.sum(ConsumptionRecord.consumed_quantity).label("total_consumed"),
-            func.sum(ConsumptionRecord.total_cost).label("total_cost"),
-            func.count(func.distinct(ConsumptionRecord.production_id)).label("runs"),
+            StockMovement.kitchen_id,
+            StockMovement.item_id,
+            StockMovement.movement_type,
+            func.sum(StockMovement.quantity),
         )
-        .join(Kitchen, Kitchen.id == ConsumptionRecord.kitchen_id)
-        .join(Item, Item.id == ConsumptionRecord.item_id)
-        .where(*filters)
-        .group_by(Kitchen.id, Kitchen.name)
-        .order_by(func.sum(ConsumptionRecord.total_cost).desc())
+        .where(
+            StockMovement.location_type == "KITCHEN",
+            func.date(StockMovement.created_at) >= as_date(start),
+            func.date(StockMovement.created_at) <= as_date(end),
+            *move_filters,
+        )
+        .group_by(StockMovement.kitchen_id, StockMovement.item_id, StockMovement.movement_type)
     ).all()
 
-    total_cost = sum(float(row.total_cost or 0) for row in rows)
+    totals: dict[tuple[int, int], dict[str, Decimal]] = {}
+    for k_id, item_id, kind, amount in moved:
+        totals.setdefault((k_id, item_id), {})[kind] = amount or Decimal("0")
+
+    data = []
+    for kitchen, item, quantity, unit_code, category, min_level in stock_rows:
+        seen = totals.get((kitchen.id, item.id), {})
+        sent = seen.get("TRANSFER_IN", Decimal("0"))
+        returned = seen.get("TRANSFER_OUT", Decimal("0"))
+        used = seen.get("PRODUCTION_CONSUMPTION", Decimal("0"))
+        wasted = seen.get("WASTAGE", Decimal("0"))
+
+        if quantity <= 0:
+            status = "OUT"
+        elif min_level and quantity <= min_level:
+            status = "LOW"
+        else:
+            status = "OK"
+
+        data.append(
+            {
+                "kitchen_id": kitchen.id,
+                "kitchen_name": kitchen.name,
+                "item_id": item.id,
+                "sku": item.sku,
+                "item_name": item.name,
+                "category_name": category,
+                "unit_code": unit_code,
+                "sent": f(sent),
+                "returned": f(returned),
+                "used": f(used),
+                "wasted": f(wasted),
+                "quantity": f(quantity),
+                "min_level": f(min_level),
+                "stock_status": status,
+                "stock_value": f(quantity * item.unit_cost),
+                "wasted_value": f(wasted * item.unit_cost),
+            }
+        )
 
     return {
-        "data": [
-            {
-                "item_id": r.id,
-                "sku": r.sku,
-                "item_name": r.name,
-                "unit_code": r.code,
-                "category_name": r[4],
-                "total_consumed": f(r.total_consumed),
-                "total_cost": f(r.total_cost),
-                "production_runs": r.runs,
-                "kitchen_count": r.kitchens,
-            }
-            for r in rows
-        ],
-        "by_kitchen": [
-            {
-                "kitchen_id": r.id,
-                "kitchen_name": r.name,
-                "total_consumed": f(r.total_consumed),
-                "total_cost": f(r.total_cost),
-                "production_runs": r.runs,
-            }
-            for r in by_kitchen
-        ],
-        "meta": {"from": start, "to": end, "total_cost": round(total_cost, 2)},
+        "data": data,
+        "meta": {
+            "from": start,
+            "to": end,
+            "total": len(data),
+            "low": sum(1 for r in data if r["stock_status"] == "LOW"),
+            "out": sum(1 for r in data if r["stock_status"] == "OUT"),
+            "stock_value": round(sum(r["stock_value"] for r in data), 2),
+            "wasted_value": round(sum(r["wasted_value"] for r in data), 2),
+        },
+    }
+
+
+def _empty_activity_meta(start, end):
+    return {
+        "from": start,
+        "to": end,
+        "total": 0,
+        "low": 0,
+        "out": 0,
+        "stock_value": 0.0,
+        "wasted_value": 0.0,
     }
 
 
@@ -509,113 +547,6 @@ def wastage_report(
             ],
         },
         "meta": {"from": start, "to": end, "total_cost": round(total_cost, 2)},
-    }
-
-
-# ------------------------------------------------------------ production ----
-@router.get("/production")
-def production_report(
-    db: DbSession,
-    user: CurrentUserDep,
-    from_: Annotated[str | None, Query(alias="from")] = None,
-    to: str | None = None,
-    kitchen_id: int | None = None,
-):
-    start, end = _window(from_, to)
-    filters, allowed = _kitchen_filter(user, ProductionRecord.kitchen_id, kitchen_id)
-    if not allowed:
-        return {"data": {}, "meta": {"from": start, "to": end}}
-
-    filters.append(func.date(ProductionRecord.produced_at).between(as_date(start), as_date(end)))
-
-    by_product = db.execute(
-        select(
-            Product.id,
-            Product.sku,
-            Product.name,
-            Product.selling_price,
-            Unit.code,
-            func.sum(ProductionRecord.output_quantity).label("total_output"),
-            func.sum(ProductionRecord.total_cost).label("total_cost"),
-            func.count(ProductionRecord.id).label("runs"),
-        )
-        .join(Product, Product.id == ProductionRecord.product_id)
-        .join(Unit, Unit.id == ProductionRecord.output_unit_id)
-        .where(*filters)
-        .group_by(Product.id, Product.sku, Product.name, Product.selling_price, Unit.code)
-        .order_by(func.sum(ProductionRecord.output_quantity).desc())
-    ).all()
-
-    by_kitchen = db.execute(
-        select(
-            Kitchen.id,
-            Kitchen.name,
-            func.sum(ProductionRecord.output_quantity).label("total_output"),
-            func.sum(ProductionRecord.total_cost).label("total_cost"),
-            func.count(ProductionRecord.id).label("runs"),
-            func.count(func.distinct(ProductionRecord.product_id)).label("distinct_products"),
-        )
-        .join(Kitchen, Kitchen.id == ProductionRecord.kitchen_id)
-        .where(*filters)
-        .group_by(Kitchen.id, Kitchen.name)
-        .order_by(func.sum(ProductionRecord.output_quantity).desc())
-    ).all()
-
-    daily = db.execute(
-        select(
-            func.date(ProductionRecord.produced_at).label("day"),
-            func.count(ProductionRecord.id).label("runs"),
-            func.sum(ProductionRecord.output_quantity).label("total_output"),
-            func.sum(ProductionRecord.total_cost).label("total_cost"),
-        )
-        .where(*filters)
-        .group_by(func.date(ProductionRecord.produced_at))
-        .order_by(func.date(ProductionRecord.produced_at))
-    ).all()
-
-    return {
-        "data": {
-            "by_product": [
-                {
-                    "product_id": r.id,
-                    "sku": r.sku,
-                    "product_name": r.name,
-                    "unit_code": r.code,
-                    "total_output": f(r.total_output),
-                    "total_cost": f(r.total_cost),
-                    "runs": r.runs,
-                    "selling_price": f(r.selling_price),
-                    "estimated_revenue": f((r.total_output or 0) * r.selling_price),
-                }
-                for r in by_product
-            ],
-            "by_kitchen": [
-                {
-                    "kitchen_id": r.id,
-                    "kitchen_name": r.name,
-                    "total_output": f(r.total_output),
-                    "total_cost": f(r.total_cost),
-                    "runs": r.runs,
-                    "distinct_products": r.distinct_products,
-                }
-                for r in by_kitchen
-            ],
-            "daily": [
-                {
-                    "day": str(r.day),
-                    "runs": r.runs,
-                    "total_output": f(r.total_output),
-                    "total_cost": f(r.total_cost),
-                }
-                for r in daily
-            ],
-        },
-        "meta": {
-            "from": start,
-            "to": end,
-            "total_cost": round(sum(float(r.total_cost or 0) for r in by_product), 2),
-            "total_output": round(sum(float(r.total_output or 0) for r in by_product), 4),
-        },
     }
 
 

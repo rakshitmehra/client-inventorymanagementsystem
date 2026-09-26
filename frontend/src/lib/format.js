@@ -20,8 +20,14 @@ export function num(value, places) {
 }
 
 export function money(value) {
-  const n = Number(value ?? 0);
-  return currencyFormat.format(Number.isFinite(n) ? n : 0);
+  // A missing figure is not a figure of zero. The API removes costs and values
+  // from anything sent to a kitchen manager - removes the key outright, rather
+  // than zeroing it, precisely so the difference survives - and printing
+  // Rs 0.00 here would put the number back as a lie. A dash says "not shown",
+  // which is the truth, and reads as one.
+  if (value === null || value === undefined || value === '') return '—';
+  const n = Number(value);
+  return Number.isFinite(n) ? currencyFormat.format(n) : '—';
 }
 
 /** Quantity plus its unit, e.g. "12.5 kg". */

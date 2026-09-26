@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { StandardListBar } from '@/components/StandardListBar';
 import AdminOnly from '@/components/AdminOnly';
 import { FETCH_ALL, useClientTable, useFetch, useListState, useReference } from '@/lib/hooks';
 import { STOCK_STATUS, money, num, qty } from '@/lib/format';
@@ -74,6 +75,13 @@ function MainInventory() {
     >
       {error && <Alert tone="error">{error.message}</Alert>}
 
+      {/* Three ways to top the store up, matching how the buying actually
+          happens. Picking one opens the receipt form already filled in. */}
+      <StandardListBar
+        title="Refill the main store"
+        onPick={(list) => router.push(`/goods-receipts/new?list=${list.id}`)}
+      />
+
       <div className="grid cols-3 mb-16">
         <Stat
           icon="rupee"
@@ -81,7 +89,7 @@ function MainInventory() {
           label="Stock value"
           value={money(data?.meta?.stock_value ?? 0)}
         />
-        <Stat icon="ingredient" tone="blue" label="Ingredients listed" value={num(data?.meta?.total ?? 0)} />
+        <Stat icon="ingredient" tone="blue" label="Items listed" value={num(data?.meta?.total ?? 0)} />
         <Stat
           icon="alert"
           tone="amber"
@@ -102,7 +110,7 @@ function MainInventory() {
                 <Select
                   value={state.category_id ?? ''}
                   onChange={(e) => update({ category_id: e.target.value })}
-                  placeholder="Any kind of ingredient"
+                  placeholder="Any category"
                   options={categories.map((c) => ({ value: c.id, label: c.name }))}
                 />
                 <Select
@@ -127,7 +135,7 @@ function MainInventory() {
             <SearchInput
               value={state.search ?? ''}
               onChange={(search) => update({ search })}
-              placeholder="Search for an ingredient…"
+              placeholder="Search for an item…"
             />
           </FilterBar>
         </div>
@@ -144,7 +152,7 @@ function MainInventory() {
           columns={[
             {
               key: 'name',
-              label: 'Ingredient',
+              label: 'Item',
               sortable: true,
               render: (r) => (
                 <div>
@@ -198,7 +206,7 @@ function MainInventory() {
               icon="box"
               title="Nothing found"
               message="Try a different search, or clear the filters to see everything."
-              action={<Button onClick={() => router.push('/items')}>Manage ingredients</Button>}
+              action={<Button onClick={() => router.push('/items')}>Manage items</Button>}
             />
           }
           footer={

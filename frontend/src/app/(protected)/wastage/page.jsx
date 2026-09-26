@@ -68,12 +68,14 @@ export default function WastagePage() {
       {error && <Alert tone="error">{error.message}</Alert>}
 
       <div className="grid cols-3 mb-16">
-        <Stat
-          icon="out"
-          tone="red"
-          label="Wastage value shown"
-          value={money(wastedValue)}
-        />
+        {isAdmin && (
+          <Stat
+            icon="out"
+            tone="red"
+            label="Wastage value shown"
+            value={money(wastedValue)}
+          />
+        )}
         <Stat icon="list" tone="amber" label="Events" value={num(table.meta.total)} />
         <Stat
           icon="layers"
@@ -169,12 +171,19 @@ export default function WastagePage() {
                 </div>
               ),
             },
-            {
-              key: 'estimated_cost',
-              label: 'Cost',
-              align: 'right',
-              render: (r) => money(r.estimated_cost),
-            },
+            // A manager is not sent the cost, and money(undefined) prints
+            // Rs 0.00 - a column of zeroes reads as an answer, so the column
+            // itself goes rather than its contents.
+            ...(isAdmin
+              ? [
+                  {
+                    key: 'estimated_cost',
+                    label: 'Cost',
+                    align: 'right',
+                    render: (r) => money(r.estimated_cost),
+                  },
+                ]
+              : []),
             {
               key: 'recorded_by_name',
               label: 'Recorded by',

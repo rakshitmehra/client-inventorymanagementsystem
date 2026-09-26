@@ -44,7 +44,6 @@ export default function RequestDetailPage() {
   const [declineNote, setDeclineNote] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState(null);
 
   // Start from what the kitchen asked for: the common case is "yes, all of it",
   // so that should take no typing at all.
@@ -63,7 +62,6 @@ export default function RequestDetailPage() {
   const sending = request.items.filter((l) => Number(approved[l.id] ?? 0) > 0);
 
   async function act(fn, done) {
-    setActionError(null);
     setBusy(true);
     try {
       const result = await fn();
@@ -71,7 +69,7 @@ export default function RequestDetailPage() {
       done?.(result);
       reload();
     } catch (err) {
-      setActionError(err.message);
+      toast.error(err.message);
     } finally {
       setBusy(false);
     }
@@ -123,7 +121,6 @@ export default function RequestDetailPage() {
         </>
       }
     >
-      {actionError && <Alert tone="error">{actionError}</Alert>}
 
       <div className="grid cols-4 mb-16">
         <div className="card">

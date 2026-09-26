@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { money, qty } from '@/lib/format';
-import { Badge, Button, NumberInput } from './ui';
+import { Badge, Button, NumberInput, Select } from './ui';
 
 /**
  * A searchable item picker. Native selects get unusable once the catalogue
@@ -40,7 +40,10 @@ export function ItemPicker({
         (item) =>
           !text ||
           item.name.toLowerCase().includes(text) ||
-          item.sku.toLowerCase().includes(text),
+          item.sku.toLowerCase().includes(text) ||
+          // Typing "dairy" should find the dairy items. With 180 items in the
+          // catalogue, the category is often the only word somebody knows.
+          (item.category_name ?? '').toLowerCase().includes(text),
       )
       .slice(0, 40);
   }, [items, query, excludeIds, value]);
@@ -115,6 +118,24 @@ export function LineItemEditor({
 }) {
   const itemsById = useMemo(() => Object.fromEntries(items.map((i) => [i.id, i])), [items]);
 
+  const [category, setCategory] = useState('');
+
+  const categories = useMemo(
+    () => [...new Set(items.map((i) => i.category_name).filter(Boolean))].sort(),
+    [items],
+  );
+
+  /**
+   * What the pickers offer. An item already on a line stays offerable whatever
+   * the filter says, so narrowing the category cannot blank out a line that is
+   * already filled in.
+   */
+  const offered = useMemo(() => {
+    if (!category) return items;
+    const chosen = new Set(lines.map((l) => l.item_id).filter(Boolean));
+    return items.filter((i) => i.category_name === category || chosen.has(i.id));
+  }, [items, category, lines]);
+
   const update = (index, patch) =>
     onChange(lines.map((line, i) => (i === index ? { ...line, ...patch } : line)));
 
@@ -149,6 +170,23 @@ export function LineItemEditor({
 
   return (
     <div>
+      {/* Narrowing to a category before picking. With a catalogue this size,
+          scrolling a list of everything to find one sauce is the slow part;
+          the search box still works across the lot when you know the name. */}
+      {categories.length > 1 && (
+        <div className="line-item-filter mb-8">
+          <span className="muted small">Show</span>
+          <Select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            options={[
+              { value: '', label: `Every category (${items.length} items)` },
+              ...categories.map((c) => ({ value: c, label: c })),
+            ]}
+          />
+        </div>
+      )}
+
       <div className="line-item-head mb-8">
         <span>Item</span>
         <span>Quantity</span>
@@ -169,7 +207,7 @@ export function LineItemEditor({
               <div className="line-item">
                 <div>
                   <ItemPicker
-                    items={items}
+                    items={offered}
                     value={line.item_id}
                     onChange={(itemId) => {
                       const picked = itemsById[itemId];

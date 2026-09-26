@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { StockTabs } from '@/components/StockTabs';
 import { useAuth } from '@/lib/auth';
 import { FETCH_ALL, useClientTable, useFetch, useListState } from '@/lib/hooks';
 import { dateTime, num } from '@/lib/format';
@@ -66,6 +67,7 @@ export default function RequestsPage() {
         )
       }
     >
+      <StockTabs />
       {error && <Alert tone="error">{error.message}</Alert>}
 
       {waiting > 0 && (

@@ -50,6 +50,11 @@ def _company(db) -> dict:
         "phone": values.get("company_phone") or "",
         "email": values.get("company_email") or "",
         "currency": values.get("company_currency") or "INR",
+        # A food business in India prints both on its paperwork. Blank rather
+        # than a placeholder when unset - an invented registration number on a
+        # document is worse than an obvious gap.
+        "gstin": values.get("company_gstin") or "",
+        "fssai": values.get("company_fssai") or "",
     }
 
 
