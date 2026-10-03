@@ -32,6 +32,7 @@ from ..models import (
     Unit,
 )
 from ..security import D, q
+from .notifications import admin_ids, notify
 from .numbering import next_number
 from .operations import create_transfer
 from .units import to_item_unit
@@ -128,6 +129,16 @@ def create_request(db: Session, payload: Any, user: CurrentUser) -> dict[str, An
         db.add(StockRequestItem(request_id=request.id, **line))
 
     db.flush()
+    notify(
+        db,
+        admin_ids(db),
+        kind="REQUEST_NEW",
+        severity="info",
+        title=f"New stock request from {kitchen.name}",
+        body=f"{request.request_no} - {len(merged)} item{'s' if len(merged) != 1 else ''}",
+        link=f"/requests/{request.id}",
+        skip_user_id=user.id,
+    )
     return {
         "id": request.id,
         "request_no": request.request_no,
@@ -204,6 +215,19 @@ def approve_request(db: Session, request_id: int, payload: Any, user: CurrentUse
     request.decision_note = data.get("decision_note")
     request.transfer_id = transfer["id"]
     db.flush()
+    if request.requested_by:
+        notify(
+            db,
+            [request.requested_by],
+            kind="REQUEST_DECIDED",
+            severity="success",
+            title=f"Your request {request.request_no} was approved",
+            body=f"{len(to_send)} item(s) sent" + (
+                f", {len(lines) - len(to_send)} could not be sent" if len(lines) > len(to_send) else ""
+            ),
+            link=f"/requests/{request.id}",
+            skip_user_id=user.id,
+        )
 
     return {
         "id": request.id,
@@ -233,6 +257,17 @@ def decline_request(db: Session, request_id: int, payload: Any, user: CurrentUse
     for line in request.items:
         line.approved_quantity = Decimal("0")
     db.flush()
+    if request.requested_by:
+        notify(
+            db,
+            [request.requested_by],
+            kind="REQUEST_DECIDED",
+            severity="warn",
+            title=f"Your request {request.request_no} was declined",
+            body=note,
+            link=f"/requests/{request.id}",
+            skip_user_id=user.id,
+        )
 
     return {"id": request.id, "request_no": request.request_no, "status": request.status}
 

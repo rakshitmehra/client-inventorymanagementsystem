@@ -82,26 +82,34 @@ function StandardListsPanel({ router }) {
   const monthAgo = Date.now() - 28 * 24 * 60 * 60 * 1000;
   const isDue = (list) => !list.last_used_at || new Date(list.last_used_at).getTime() < monthAgo;
   const due = lists.filter(isDue);
+  // The ones that need a run come first, and only a handful are shown here -
+  // the full set is one click away, so the home screen stays short however
+  // many lists there are.
+  const SHOWN = 5;
+  const ordered = [...lists].sort((a, b) => Number(isDue(b)) - Number(isDue(a)));
+  const shown = ordered.slice(0, SHOWN);
 
   return (
     <div className="card mb-16">
       <div className="card-head">
-        <h3>Standard lists</h3>
+        <div>
+          <h3>Standard lists</h3>
+          <div className="cell-sub">
+            {due.length > 0
+              ? `${due.length} of ${lists.length} not run in the last 4 weeks`
+              : 'All run within the last 4 weeks'}
+          </div>
+        </div>
         <div className="card-head-actions">
           <Button onClick={() => router.push('/standard-lists')} icon="documents">
-            Manage lists
+            {lists.length > SHOWN ? `See all ${lists.length}` : 'Manage lists'}
           </Button>
         </div>
       </div>
 
-      {due.length > 0 && (
-        <Alert tone="warn" title={`${due.length} list${due.length === 1 ? '' : 's'} not run in the last four weeks`}>
-          Run one below to place the whole order at once, or open it first to change any amounts.
-        </Alert>
-      )}
-
       <DataTable
-        rows={lists}
+        numbered={false}
+        rows={shown}
         columns={[
           {
             key: 'name',
@@ -445,6 +453,12 @@ function KitchenHome() {
           <div className="action-row mb-16">
             <ActionCard
               primary
+              href="/use-stock"
+              icon="cooking"
+              title="Use Stock"
+              sub="Take off what the kitchen used"
+            />
+            <ActionCard
               href="/requests/new"
               icon="request"
               title="Ask for Stock"

@@ -22,6 +22,7 @@ from ..schemas import (
     CategoryCreate,
     CategoryUpdate,
     ItemCreate,
+    ItemPricesRequest,
     ItemUpdate,
     SupplierCreate,
     SupplierUpdate,
@@ -556,6 +557,47 @@ def update_item(
     db.commit()
 
     return {"data": {"id": item.id, "sku": item.sku, "name": item.name}}
+
+
+@router.put("/item-prices")
+def update_item_prices(
+    payload: ItemPricesRequest, request: Request, db: DbSession, admin: AdminUserDep
+):
+    """
+    Set the price of many items in one save.
+
+    Each price is for a single unit of the item - one kg, one piece, one litre -
+    because every cost in the system (stock value, what a kitchen used, a
+    recipe) is that price times a quantity. Entering a price per single unit
+    keeps all of those right whatever unit a quantity is later typed in.
+    """
+    wanted = {line.item_id: line.unit_cost for line in payload.prices}
+    items = {
+        item.id: item
+        for item in db.execute(select(Item).where(Item.id.in_(list(wanted)))).scalars()
+    }
+    missing = [i for i in wanted if i not in items]
+    if missing:
+        raise not_found(f"Item {missing[0]}")
+
+    changed = 0
+    for item_id, price in wanted.items():
+        item = items[item_id]
+        if Decimal(str(price)) != item.unit_cost:
+            item.unit_cost = Decimal(str(price))
+            changed += 1
+
+    log_audit(
+        db,
+        request=request,
+        user=admin,
+        action="ITEM_PRICES_UPDATED",
+        entity_type="ITEM",
+        description=f"Updated the price of {changed} item(s)",
+        metadata={"prices": {str(k): v for k, v in wanted.items()}},
+    )
+    db.commit()
+    return {"data": {"updated": changed}, "message": f"Saved {changed} price(s)"}
 
 
 @router.delete("/items/{item_id}")

@@ -2,6 +2,7 @@
 
 import { useAppFrame } from './AppFrame';
 import { Icon } from './Icon';
+import NotificationBell from './NotificationBell';
 
 /**
  * The part of the screen that belongs to one page: its header and its content.
@@ -31,7 +32,10 @@ export default function Layout({ title, subtitle, actions, children }) {
           <h1 className="topbar-title">{title}</h1>
           {subtitle && <div className="topbar-sub">{subtitle}</div>}
         </div>
-        {actions && <div className="topbar-actions">{actions}</div>}
+        <div className="topbar-right">
+          {actions && <div className="topbar-actions">{actions}</div>}
+          <NotificationBell />
+        </div>
       </header>
 
       <main className="content">{children}</main>

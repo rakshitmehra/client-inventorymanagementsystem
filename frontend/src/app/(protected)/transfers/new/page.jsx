@@ -63,14 +63,14 @@ function NewTransfer() {
 
   const kitchens = useFetch('/kitchens');
   const units = useFetch('/units');
-  const items = useFetch('/items?page_size=300');
+  const items = useFetch('/items?page_size=2000');
 
   // Stock at the source, so the form can warn before anything is submitted.
   const sourcePath = isReturn
     ? kitchenId
-      ? `/kitchens/${kitchenId}/inventory?page_size=500`
+      ? `/kitchens/${kitchenId}/inventory?page_size=2000`
       : null
-    : '/main-inventory?page_size=500';
+    : '/main-inventory?page_size=2000';
   const source = useFetch(sourcePath, { skip: !sourcePath });
 
   const availability = useMemo(() => {

@@ -145,6 +145,43 @@ Include every origin a browser will actually use. Vercel gives each preview
 deployment its own domain, and those are **not** covered by the production one —
 add them too if you intend to test previews.
 
+## 4b. Your own address: `kitstock.<your-domain>`
+
+Everything above works on the `*.vercel.app` addresses. To use your own name
+instead, for example `kitstock.example.com` for the web app and
+`api.kitstock.example.com` for the API (replace `example.com` with your domain):
+
+1. **Web project → Settings → Domains → Add** `kitstock.example.com`.
+   **API project → Settings → Domains → Add** `api.kitstock.example.com`.
+2. Vercel then shows the DNS record to create at your domain registrar. For a
+   subdomain it is a **CNAME** (`kitstock` and `api.kitstock`, both pointing to
+   `cname.vercel-dns.com`, or the exact value Vercel displays). HTTPS
+   certificates are issued automatically once DNS resolves.
+3. **Web project** - set `NEXT_PUBLIC_API_URL` to
+   `https://api.kitstock.example.com/api` and **redeploy** (it is baked in at
+   build time).
+4. **API project** - set `CORS_ORIGINS` to `https://kitstock.example.com`
+   (keep the `*.vercel.app` address too if you still use it, comma separated)
+   and **redeploy**.
+5. Open `https://kitstock.example.com` and sign in. A CORS error in the console
+   means step 4 was not redeployed.
+
+**One address for both (simplest).** Instead of a second domain, let the web
+project forward `/api` to the API project, so the browser only ever uses
+`kitstock.example.com` (sign-in is `kitstock.example.com/login`, its request goes
+to `kitstock.example.com/api/auth/login`, and there is no CORS to configure):
+
+- **Web project** - set `NEXT_PUBLIC_API_URL` to `/api` and
+  `API_PROXY_TARGET` to `https://<your-api-project>.vercel.app`, then redeploy.
+- **API project** - nothing to add; same-origin calls do not need CORS.
+
+Skip the API subdomain if you like: the web app can sit on its own name while
+`NEXT_PUBLIC_API_URL` keeps pointing at the API project's `*.vercel.app`
+address.
+
+On your own computer the matching name is `http://kitstock.localhost:3000`
+(API at `http://api.kitstock.localhost:8000/api`); see `frontend/.env.example`.
+
 ## 5. Check it
 
 Open the Vercel URL and work down this list. It covers every layer: CDN, API,

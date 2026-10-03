@@ -131,7 +131,14 @@ def run_in_transaction(db: Session, work: Callable[[Session], T]) -> T:
             if db.in_transaction():
                 db.rollback()
             with db.begin():
-                return work(db)
+                result = work(db)
+                # Announce anything the work noticed (low stock) inside the
+                # same transaction, so a notification exists exactly when the
+                # change it describes does.
+                from .services.notifications import flush_low_stock
+
+                flush_low_stock(db)
+                return result
         except Exception as error:  # noqa: BLE001 - re-raised below
             db.rollback()
             if not _is_retryable(error):

@@ -34,6 +34,8 @@ const ENTITY_TYPES = [
   'CATEGORY',
   'SUPPLIER',
   'KITCHEN_INVENTORY',
+  'USAGE',
+  'PAST_BILL',
 ];
 
 /** Actions that changed stock are worth highlighting in the list. */
@@ -47,6 +49,10 @@ const TONE_FOR = {
   PRODUCTION_RECORDED: 'violet',
   WASTAGE_RECORDED: 'red',
   STOCK_ADJUSTED: 'amber',
+  KITCHEN_USAGE_RECORDED: 'amber',
+  PAST_BILL_ADDED: 'blue',
+  PAST_BILL_EDITED: 'blue',
+  PAST_BILL_DELETED: 'red',
 };
 
 export default function AuditLogsPage() {
@@ -212,7 +218,7 @@ function AuditLogs() {
           }
         />
 
-        <Pagination meta={table.meta} onPage={table.setPage} />
+        <Pagination meta={table.meta} onPage={table.setPage} onPageSize={table.setPageSize} />
       </div>
 
       <Modal

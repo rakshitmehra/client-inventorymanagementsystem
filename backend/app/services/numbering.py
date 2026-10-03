@@ -11,6 +11,8 @@ SEQUENCES: dict[str, tuple[str, int]] = {
     "RECEIPT": ("GRN", 5),
     "MOVEMENT": ("MOV", 6),
     "REQUEST": ("REQ", 5),
+    "USAGE": ("USE", 5),
+    "PASTBILL": ("PB", 5),
 }
 
 
@@ -41,3 +43,30 @@ def next_number(db: Session, name: str) -> str:
     db.flush()
 
     return f"{row.prefix}-{str(value).zfill(row.padding)}"
+
+
+def next_numbers(db: Session, name: str, count: int) -> list[str]:
+    """
+    Allocate ``count`` consecutive document numbers with one lock.
+
+    A bulk save writes a ledger row per item; asking for a number one at a time
+    would lock and update the sequence row once per item. This takes the whole
+    block in a single step instead.
+    """
+    prefix, padding = SEQUENCES[name]
+
+    row = db.execute(
+        select(DocumentSequence).where(DocumentSequence.name == name).with_for_update()
+    ).scalar_one_or_none()
+    if row is None:
+        row = DocumentSequence(name=name, prefix=prefix, next_value=1, padding=padding)
+        db.add(row)
+        db.flush()
+        row = db.execute(
+            select(DocumentSequence).where(DocumentSequence.name == name).with_for_update()
+        ).scalar_one()
+
+    first = row.next_value
+    row.next_value = first + count
+    db.flush()
+    return [f"{row.prefix}-{str(first + i).zfill(row.padding)}" for i in range(count)]

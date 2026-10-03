@@ -167,7 +167,7 @@ class Pagination:
 #: The ceiling is what keeps that honest - a caller can take a catalogue in a
 #: single page, but never enough rows to build a response that times out. Lists
 #: that outgrow it stay paginated and say so.
-MAX_PAGE_SIZE = 500
+MAX_PAGE_SIZE = 2000
 
 
 def pagination(page: int = 1, page_size: int = 25) -> Pagination:

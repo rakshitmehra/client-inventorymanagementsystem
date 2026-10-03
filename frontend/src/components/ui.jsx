@@ -401,6 +401,7 @@ export function ConfirmDialog({
     <Modal
       open={open}
       title={title}
+      size="compact"
       onClose={loading ? undefined : onCancel}
       footer={
         <>
@@ -551,56 +552,116 @@ export function PagedTable({ rows, pageSize, ...props }) {
   );
 }
 
-export function Pagination({ meta, onPage }) {
+const PAGE_SIZES = [10, 20, 50, 100];
+
+/** Page numbers to show: the ends, the neighbours of the current page, gaps as null. */
+function pageNumbers(page, pages) {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+  const keep = new Set([1, 2, pages - 1, pages, page - 1, page, page + 1]);
+  const list = [...keep].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
+  const out = [];
+  list.forEach((n, i) => {
+    if (i > 0 && n - list[i - 1] > 1) out.push(null);
+    out.push(n);
+  });
+  return out;
+}
+
+/**
+ * The footer under every list: where you are, how many rows a page holds, and
+ * numbered pages to jump about - which is what makes a thousand rows usable.
+ *
+ * It is always drawn when there are rows, so the reader can see the list is
+ * paged rather than wondering whether the page is cut off. The rows-per-page
+ * choice appears when the caller passes `onPageSize`.
+ */
+export function Pagination({ meta, onPage, onPageSize }) {
   const total = meta?.total ?? 0;
   const pages = meta?.total_pages ?? 0;
 
-  // The component owns its footer bar, so a table with nothing to page through
-  // renders no empty strip under it and no call site has to guess.
   if (!total) return null;
 
   // Said out loud whenever the browser is holding only part of the list, so a
   // filtered view is never mistaken for a complete one.
   const partial = meta.truncated ? (
     <span className="info warn-text">
-      Showing the most recent {meta.filtered_from} of {meta.truncated}. Narrow the dates to
-      search further back.
+      Only the first {meta.filtered_from} of {meta.truncated} are loaded here. Narrow the dates
+      or archive what is no longer used to reach the rest.
     </span>
   ) : null;
-
-  if (pages <= 1) {
-    return (
-      <div className="card-foot">
-        <span className="info muted">
-          {total} {total === 1 ? 'row' : 'rows'}
-          {meta.filtered_from > total && ` of ${meta.filtered_from}`}
-        </span>
-        {partial}
-      </div>
-    );
-  }
 
   const { page, page_size: size } = meta;
   const from = (page - 1) * size + 1;
   const to = Math.min(total, page * size);
 
   return (
-    <div className="card-foot">
+    <div className="card-foot pager">
+      <span className="info pager-info">
+        Showing {from}–{to} of {total}
+        {meta.filtered_from > total && <span className="muted"> (filtered from {meta.filtered_from})</span>}
+      </span>
       {partial}
-      <div className="pagination">
-        <span className="info">
-          Showing {from}–{to} of {total}
-        </span>
-        <Button onClick={() => onPage(page - 1)} disabled={page <= 1} icon="arrow-left">
-          Previous
-        </Button>
-        <span className="nowrap strong">
-          Page {page} of {pages}
-        </span>
-        <Button onClick={() => onPage(page + 1)} disabled={page >= pages} icon="arrow-right">
-          Next
-        </Button>
-      </div>
+
+      {onPageSize && total > PAGE_SIZES[0] && (
+        <label className="pager-size">
+          <span className="muted small">Rows per page</span>
+          <select
+            className="select"
+            value={size}
+            onChange={(e) => onPageSize(Number(e.target.value))}
+            aria-label="Rows per page"
+          >
+            {[...new Set([...PAGE_SIZES, size])].sort((x, y) => x - y).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {pages > 1 && (
+        <nav className="pagination pager-nav" aria-label="Pages">
+          <button
+            type="button"
+            className="pager-btn"
+            onClick={() => onPage(page - 1)}
+            disabled={page <= 1}
+            aria-label="Previous page"
+          >
+            ‹
+          </button>
+          <span className="pager-mobile nowrap strong">
+            Page {page} of {pages}
+          </span>
+          {pageNumbers(page, pages).map((n, i) =>
+            n === null ? (
+              <span key={`gap-${i}`} className="pager-gap">
+                …
+              </span>
+            ) : (
+              <button
+                key={n}
+                type="button"
+                className={`pager-btn pager-num${n === page ? ' active' : ''}`}
+                onClick={() => onPage(n)}
+                aria-current={n === page ? 'page' : undefined}
+              >
+                {n}
+              </button>
+            ),
+          )}
+          <button
+            type="button"
+            className="pager-btn"
+            onClick={() => onPage(page + 1)}
+            disabled={page >= pages}
+            aria-label="Next page"
+          >
+            ›
+          </button>
+        </nav>
+      )}
     </div>
   );
 }

@@ -1026,6 +1026,125 @@ class InventoryAdjustment(Base):
 
 
 # ---------------------------------------------------------------------------
+# kitchen usage (stock a kitchen has used up, entered in one go)
+# ---------------------------------------------------------------------------
+class UsageRecord(Base):
+    """
+    A kitchen manager's note of what the kitchen has used.
+
+    Managers do not log each ingredient as it goes into a bowl. They say, after
+    a few orders or at the end of the day, "we got through this much of these
+    things". One record holds all of those lines, so a day's usage is one
+    document rather than forty ledger rows to hunt through. Each line still
+    writes its own ledger entry, exactly like any other stock movement.
+    """
+
+    __tablename__ = "usage_records"
+    __table_args__ = (Index("ix_usage_kitchen_time", "kitchen_id", "used_at"),)
+
+    id: Mapped[int] = _pk("usage_records")
+    usage_no: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    kitchen_id: Mapped[int] = _fk("kitchens.id", ondelete="RESTRICT")
+    used_at: Mapped[datetime] = _now()
+    total_items: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_cost: Mapped[Decimal] = mapped_column(Money, default=Decimal("0"), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = _fk("users.id", ondelete="SET NULL")
+    created_at: Mapped[datetime] = _now()
+
+    kitchen: Mapped[Kitchen] = relationship()
+    creator: Mapped[User | None] = relationship()
+    items: Mapped[list[UsageRecordItem]] = relationship(
+        back_populates="usage", cascade="all, delete-orphan", order_by="UsageRecordItem.id"
+    )
+
+
+class UsageRecordItem(Base):
+    __tablename__ = "usage_record_items"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_usage_item_quantity"),
+        CheckConstraint("base_quantity > 0", name="ck_usage_item_base_quantity"),
+        Index("ix_usage_items_usage", "usage_id"),
+    )
+
+    id: Mapped[int] = _pk("usage_record_items")
+    usage_id: Mapped[int] = _fk("usage_records.id", ondelete="CASCADE")
+    item_id: Mapped[int] = _fk("items.id", ondelete="RESTRICT")
+    quantity: Mapped[Decimal] = mapped_column(Qty, nullable=False)
+    unit_id: Mapped[int] = _fk("units.id", ondelete="RESTRICT")
+    base_quantity: Mapped[Decimal] = mapped_column(Qty, nullable=False)
+    balance_after: Mapped[Decimal] = mapped_column(Qty, nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column(Rate, default=Decimal("0"), nullable=False)
+    total_cost: Mapped[Decimal] = mapped_column(Money, default=Decimal("0"), nullable=False)
+
+    usage: Mapped[UsageRecord] = relationship(back_populates="items")
+    item: Mapped[Item] = relationship()
+    unit: Mapped[Unit] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# past bills (kept for audit only - they never touch stock)
+# ---------------------------------------------------------------------------
+class PastBill(Base):
+    """
+    A supplier bill from before the system was in use, kept as a record.
+
+    This is deliberately not a goods receipt. A receipt adds stock and writes
+    ledger entries; a bill from last year describes stock that has long since
+    been used, so loading it as a receipt would invent stock that is not on
+    the shelf. Past bills are therefore a plain archive: they are read, searched
+    and printed, and nothing in the stock engine ever sees them.
+
+    Supplier and item names are stored as typed. Old bills mention suppliers and
+    products that are not in today's catalogue, and an audit record has to show
+    what the paper said, not what the catalogue says now.
+    """
+
+    __tablename__ = "past_bills"
+    __table_args__ = (
+        CheckConstraint("total_amount >= 0", name="ck_past_bill_total"),
+        Index("ix_past_bill_date", "bill_date"),
+    )
+
+    id: Mapped[int] = _pk("past_bills")
+    bill_no: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    supplier_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    invoice_no: Mapped[str | None] = mapped_column(String(60))
+    bill_date: Mapped[date] = mapped_column(Date, nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Money, default=Decimal("0"), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = _fk("users.id", ondelete="SET NULL")
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = _now()
+
+    creator: Mapped[User | None] = relationship()
+    items: Mapped[list[PastBillItem]] = relationship(
+        back_populates="bill", cascade="all, delete-orphan", order_by="PastBillItem.id"
+    )
+
+
+class PastBillItem(Base):
+    __tablename__ = "past_bill_items"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_past_bill_item_quantity"),
+        CheckConstraint("unit_price >= 0", name="ck_past_bill_item_price"),
+        Index("ix_past_bill_items_bill", "bill_id"),
+    )
+
+    id: Mapped[int] = _pk("past_bill_items")
+    bill_id: Mapped[int] = _fk("past_bills.id", ondelete="CASCADE")
+    # Optional link to today's catalogue; the typed name is what is shown.
+    item_id: Mapped[int | None] = _fk("items.id", ondelete="SET NULL")
+    item_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Qty, nullable=False)
+    unit: Mapped[str | None] = mapped_column(String(24))
+    unit_price: Mapped[Decimal] = mapped_column(Rate, default=Decimal("0"), nullable=False)
+    line_total: Mapped[Decimal] = mapped_column(Money, default=Decimal("0"), nullable=False)
+
+    bill: Mapped[PastBill] = relationship(back_populates="items")
+
+
+# ---------------------------------------------------------------------------
 # audit and documents
 # ---------------------------------------------------------------------------
 class AuditLog(Base):
@@ -1087,6 +1206,30 @@ class DocumentSequence(Base):
     prefix: Mapped[str] = mapped_column(String(8), nullable=False)
     next_value: Mapped[int] = mapped_column(BigInteger, default=1, nullable=False)
     padding: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+
+
+class Notification(Base):
+    """
+    Something a person should know about, kept until they have read it.
+
+    One row per recipient. A low-stock warning for a kitchen is a row for the
+    administrator and a row for each of that kitchen's managers, so each person
+    marks their own as read without clearing anyone else's bell.
+    """
+
+    __tablename__ = "notifications"
+    __table_args__ = (Index("ix_notification_user", "user_id", "read_at", "created_at"),)
+
+    id: Mapped[int] = _pk("notifications")
+    user_id: Mapped[int] = _fk("users.id", ondelete="CASCADE")
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    severity: Mapped[str] = mapped_column(String(8), default="info", nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    body: Mapped[str | None] = mapped_column(Text)
+    # Where tapping the notification goes, as a path inside the app.
+    link: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = _now()
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Setting(Base):

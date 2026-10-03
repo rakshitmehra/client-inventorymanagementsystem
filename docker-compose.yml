@@ -45,7 +45,7 @@ services:
       DEBUG: "true"
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/kitchenstock
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://kitstock.localhost:3000
       SEED_ON_STARTUP: "true"
       SEED_DEMO_DATA: "true"
     ports:

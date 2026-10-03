@@ -57,13 +57,13 @@
      ordinary web text, but the page now reads as a business tool rather
      than a large-print edition. 13px is for meta only - never a value
      someone has to act on. */
-  --text-xs: 13px;
-  --text-sm: 14px;
-  --text-md: 16px;
-  --text-lg: 18px;
-  --text-xl: 20px;
-  --text-2xl: 24px;
-  --text-3xl: 28px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 21px;
+  --text-3xl: 24px;
 
   --radius-sm: 6px;
   --radius: 10px;
@@ -77,7 +77,7 @@
 
   /* Every clickable thing is at least this tall. Unchanged: smaller text
      is fine, smaller targets are not. */
-  --tap: 48px;
+  --tap: 42px;
 
   --sidebar-w: 248px;
   --sidebar-rail: 62px;
@@ -151,15 +151,16 @@ a:hover { color: var(--brand-800); }
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 14px 14px;
+  gap: 10px;
+  padding: 0 14px;
+  height: var(--header-h);
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   flex-shrink: 0;
 }
 
 .sidebar-logo {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius);
   background: var(--brand-500);
   color: var(--white);
@@ -168,62 +169,108 @@ a:hover { color: var(--brand-800); }
   flex-shrink: 0;
 }
 
-.sidebar-brand-text { min-width: 0; }
+.sidebar-brand-text { min-width: 0; line-height: 1.2; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
 .sidebar-brand-name {
   font-weight: 700;
   font-size: var(--text-lg);
+  line-height: 1.2;
   color: var(--white);
   white-space: nowrap;
 }
 .sidebar-brand-sub {
   font-size: var(--text-xs);
+  line-height: 1.2;
   color: var(--brand-300);
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
 }
 
 /* Narrows the menu to a rail of icons, for when the table matters more than
    the navigation. */
 .sidebar-collapse {
   margin-left: auto;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-radius: 50%;
   background: transparent;
   color: var(--brand-300);
   cursor: pointer;
 }
-.sidebar-collapse:hover { background: rgba(255, 255, 255, 0.14); color: var(--white); }
+.sidebar-collapse { background: rgba(255, 255, 255, 0.08); }
+.sidebar-collapse:hover { background: rgba(255, 255, 255, 0.18); color: var(--white); }
 
 /* ---- the collapsed rail ----
    Only the labels go. Every link keeps its icon, its tooltip and its place,
    so the menu you learned is still the menu that is there. */
+@media (min-width: 1025px) {
 .app.sidebar-collapsed { grid-template-columns: var(--sidebar-rail) 1fr; }
-.app.sidebar-collapsed .sidebar-brand { justify-content: center; padding: 16px 8px; }
+}
+/* On the narrow rail the logo and the widen button cannot share a row, so they
+   stack and are centred on the same line as the icons below. */
+@media (min-width: 1025px) {
+.app.sidebar-collapsed .sidebar-brand {
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  height: auto;
+  padding: 14px 0 12px;
+}
+}
+@media (min-width: 1025px) {
+.app.sidebar-collapsed .sidebar-logo { margin: 0; }
+}
+@media (min-width: 1025px) {
+.app.sidebar-collapsed .sidebar-collapse { margin: 0; }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .sidebar-brand-text,
 .app.sidebar-collapsed .nav-section-label,
 .app.sidebar-collapsed .nav-item-label,
 .app.sidebar-collapsed .sidebar-user-text,
 .app.sidebar-collapsed .nav-section svg { display: none; }
+}
 /* The button's label is a bare text node, which no selector can reach, so the
    text is collapsed by size and the icon given its own back. */
-.app.sidebar-collapsed .sidebar-account .btn { font-size: 0; }
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .sidebar-account .btn-icon-slot { font-size: var(--text-md); }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .sidebar-collapse { margin: 0; }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .nav-section { padding: 10px 0 4px; justify-content: center; }
+}
 /* A folded section still shows its icons here - on a rail there is no room
    for a heading to explain what was hidden, and a gap with nothing in it
    reads as a fault rather than a choice. */
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .nav-links.folded { display: block; }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .nav-item { justify-content: center; padding: 10px 0; gap: 0; }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .sidebar-nav { padding: 8px 6px 16px; }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .sidebar-footer { padding: 10px 6px; }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .sidebar-user { justify-content: center; }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .sidebar-account { flex-direction: column; gap: 6px; }
+}
+@media (min-width: 1025px) {
 .app.sidebar-collapsed .sidebar-account .btn { width: 100%; padding: 8px 0; justify-content: center; }
+}
 
 .sidebar-nav {
   flex: 1;
@@ -315,11 +362,12 @@ a:hover { color: var(--brand-800); }
 .sidebar-user-name { font-size: var(--text-md); font-weight: 700; color: var(--white); }
 .sidebar-user-role { font-size: var(--text-xs); color: var(--brand-300); font-weight: 500; }
 
-.sidebar-account { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.sidebar-account { display: flex; flex-direction: column; gap: 8px; }
 .sidebar-account .btn {
   width: 100%;
-  justify-content: flex-start;
-  min-height: var(--tap);
+  justify-content: center;
+  min-height: 40px;
+  padding: 6px 0;
   background: transparent;
   border-color: rgba(255, 255, 255, 0.24);
   color: rgba(255, 255, 255, 0.92);
@@ -703,7 +751,7 @@ table.data tfoot td {
 .btn-danger:hover:not(:disabled) { background: var(--red-700); border-color: var(--red-700); }
 
 .btn-sm { min-height: 42px; padding: 8px 16px; font-size: var(--text-sm); }
-.btn-lg { min-height: 60px; padding: 16px 32px; font-size: var(--text-lg); }
+.btn-lg { min-height: 50px; padding: 12px 26px; font-size: var(--text-md); }
 .btn-block { width: 100%; }
 /* A button with an icon and no label. Square, and still a full tap target. */
 .btn-icon {
@@ -874,6 +922,7 @@ table.data tfoot td {
   max-width: 620px;
   margin: auto;
 }
+.modal.compact { max-width: 440px; }
 .modal.wide { max-width: 940px; }
 .modal.xwide { max-width: 1160px; }
 .modal-head {
@@ -1251,8 +1300,8 @@ table.data tfoot td {
   width: 100%;
   gap: 14px;
   align-items: center;
-  min-height: 60px;
-  padding: 12px 16px;
+  min-height: 46px;
+  padding: 8px 14px;
   border: none;
   background: none;
   cursor: pointer;
@@ -1614,18 +1663,18 @@ table.slip-table tfoot td {
 
 .sidebar-close {
   margin-left: auto;
-  width: var(--tap);
-  height: var(--tap);
-  border-radius: var(--radius-sm);
-  border: 2px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.12);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.1);
   color: var(--white);
   cursor: pointer;
   flex-shrink: 0;
   display: grid;
   place-items: center;
 }
-.sidebar-close:hover { background: rgba(255, 255, 255, 0.24); }
+.sidebar-close:hover { background: rgba(255, 255, 255, 0.22); }
 
 
 
@@ -1811,9 +1860,6 @@ table.slip-table tfoot td {
   .action-card-icon { width: 44px; height: 44px; }
 
   /* ---- everything else ------------------------------------------------ */
-  .pagination { flex-direction: column; align-items: stretch; }
-  .pagination .info { margin-right: 0; text-align: center; }
-  .pagination .btn { width: 100%; }
 
   /* A modal fills the screen: a floating panel on a phone is fiddly. */
   .modal-backdrop { padding: 0; align-items: stretch; }
@@ -1823,6 +1869,11 @@ table.slip-table tfoot td {
     min-height: 100vh;
     margin: 0;
   }
+  /* A yes/no question stays a small card in the middle instead of taking
+     over the whole phone screen. */
+  .modal-backdrop:has(.modal.compact) { padding: 20px; align-items: center; }
+  .modal.compact { min-height: 0; border-radius: var(--radius-lg); }
+  .modal.compact .modal-foot { position: static; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
   .modal-head { padding: 16px; position: sticky; top: 0; background: var(--white); z-index: 2; }
   .modal-body { max-height: none; padding: 18px 16px; }
   .modal-foot {
@@ -1887,4 +1938,343 @@ table.slip-table tfoot td {
 @media (max-height: 520px) and (max-width: 1024px) {
   .sidebar { overflow-y: auto; }
   .sidebar-nav { overflow-y: visible; }
+}
+
+
+/* ------------------------------------------------------------- use stock --- */
+.use-howto {
+  background: var(--brand-50);
+  border: 2px solid var(--brand-100);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-size: var(--text-md);
+  color: var(--ink-800);
+}
+.use-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+}
+.use-toggle input { width: 22px; height: 22px; }
+.use-list { list-style: none; margin: 0; padding: 0; }
+.use-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px;
+  border-bottom: 2px solid var(--ink-100);
+}
+.use-row:last-child { border-bottom: 0; }
+.use-row.has-value { background: var(--brand-50); }
+.use-name { min-width: 0; flex: 1; }
+.use-over { color: var(--red-700); font-weight: 700; font-size: var(--text-sm); margin-top: 2px; }
+.use-stepper { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.use-stepper .input { width: 110px; text-align: center; font-weight: 700; font-size: var(--text-lg); }
+.use-step {
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--ink-300);
+  background: var(--white);
+  color: var(--ink-800);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.use-step:hover:not(:disabled) { background: var(--brand-50); border-color: var(--brand-500); }
+.use-step:disabled { opacity: 0.4; cursor: default; }
+.use-unit { width: 44px; color: var(--ink-600); font-weight: 600; }
+.use-history { list-style: none; margin: 0; padding: 0; }
+.use-history li { padding: 14px 22px; border-bottom: 2px solid var(--ink-100); display: grid; gap: 8px; }
+.use-history li:last-child { border-bottom: 0; }
+.use-history-head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.use-history-items { display: flex; gap: 8px; flex-wrap: wrap; }
+.use-review { list-style: none; margin: 0; padding: 0; border: 2px solid var(--ink-200); border-radius: var(--radius); max-height: 280px; overflow-y: auto; }
+.use-review li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--ink-100); }
+.use-review li:last-child { border-bottom: 0; }
+.use-bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: 20px;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: var(--white);
+  border-top: 2px solid var(--brand-500);
+  box-shadow: 0 -6px 18px rgba(13, 21, 33, 0.1);
+  z-index: 20;
+}
+.use-bar.show { display: flex; }
+.use-bar-text { flex: 1; font-size: var(--text-md); }
+
+/* ------------------------------------------------------------ past bills --- */
+.bill-line {
+  display: grid;
+  grid-template-columns: minmax(180px, 2.6fr) 1fr 0.9fr 1.1fr 1.1fr var(--tap);
+  gap: 10px;
+  align-items: center;
+}
+.bill-line > label { display: block; min-width: 0; }
+.bill-line-head { font-weight: 700; color: var(--ink-700); font-size: var(--text-sm); margin-bottom: 8px; }
+.bill-lines { display: flex; flex-direction: column; gap: 10px; }
+.bill-line-label { display: none; }
+.bill-line-top { display: none; }
+.bill-remove { width: var(--tap); padding: 0; }
+
+.suggest { position: relative; }
+.suggest .picker-menu { max-height: 220px; }
+
+@media (max-width: 900px) {
+  .use-row { flex-direction: column; align-items: stretch; padding: 12px 14px; }
+  .use-stepper { justify-content: space-between; }
+  .use-stepper .input { flex: 1; width: auto; min-width: 0; }
+  .use-bar { padding: 10px 12px; flex-wrap: wrap; }
+  .use-bar-text { flex-basis: 100%; }
+  .use-bar .btn-lg { flex: 1; }
+  .bill-line-head { display: none; }
+  .bill-line {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px;
+    background: var(--ink-50);
+    border: 2px solid var(--ink-200);
+    border-radius: var(--radius);
+  }
+  .bill-line > label:first-of-type { grid-column: 1 / -1; }
+  .bill-line-top {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: var(--text-sm);
+    color: var(--ink-700);
+  }
+  .bill-line-top .btn { min-height: 34px; padding: 4px 12px; font-size: var(--text-sm); }
+  .bill-remove { display: none; }
+  .bill-line-label { display: block; font-size: var(--text-xs); font-weight: 700; color: var(--ink-600); margin-bottom: 3px; }
+  .bill-add { width: 100%; }
+  .bill-foot.card-foot { flex-direction: column; align-items: stretch; }
+  .bill-foot .push-end { display: none; }
+  .bill-foot .btn { width: 100%; }
+}
+
+/* Category tabs on the Use Stock screen: one row that scrolls sideways, so a
+   long list of categories never pushes the items off the screen. */
+.use-cats {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 12px;
+  margin-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.use-cat {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--ink-300);
+  background: var(--white);
+  color: var(--ink-800);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.use-cat:hover { border-color: var(--brand-500); }
+.use-cat.active { background: var(--brand-600); border-color: var(--brand-600); color: var(--white); }
+.use-cat-count { font-size: var(--text-xs); opacity: 0.7; font-weight: 500; }
+.use-cat-done {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--green-100);
+  color: var(--green-800);
+}
+.use-cat.active .use-cat-done { background: var(--white); }
+
+/* ----------------------------------------------------------- item prices --- */
+.price-list { list-style: none; margin: 0; padding: 0; }
+.price-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 22px;
+  border-bottom: 2px solid var(--ink-100);
+}
+.price-row:last-child { border-bottom: 0; }
+.price-row.dirty { background: var(--brand-50); }
+.price-input { display: flex; align-items: center; gap: 8px; }
+.price-input .input { width: 120px; }
+.price-check { font-size: var(--text-sm); white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .price-row { grid-template-columns: 1fr; gap: 8px; padding: 12px 14px; }
+  .price-input .input { flex: 1; width: auto; min-width: 0; }
+}
+
+
+/* ----------------------------------------------------------------- pager --- */
+.card-foot.pager { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.pager-info { font-weight: 600; color: var(--ink-700); margin-right: auto; }
+.pager-size { display: inline-flex; align-items: center; gap: 8px; }
+.pager-size .select { width: 80px; min-height: 36px; padding: 4px 28px 4px 10px; font-size: var(--text-sm); background-position: right 8px center; }
+.pager-nav { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.pager .pagination { flex: 0 0 auto; }
+.pager-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--ink-300);
+  background: var(--white);
+  color: var(--ink-800);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.pager-btn:hover:not(:disabled) { border-color: var(--brand-500); background: var(--brand-50); }
+.pager-btn:disabled { opacity: 0.4; cursor: default; }
+.pager-btn.active { background: var(--brand-600); border-color: var(--brand-600); color: var(--white); }
+.pager-gap { padding: 0 4px; color: var(--ink-500); }
+.pager-mobile { display: none; padding: 0 8px; font-size: var(--text-sm); }
+
+@media (max-width: 760px) {
+  .pager-info { flex-basis: 100%; margin-right: 0; }
+  .pager-nav { flex: 1; justify-content: space-between; }
+  .pager-num, .pager-gap { display: none; }
+  .pager-mobile { display: inline; }
+  .pager-btn { min-width: 44px; height: 40px; }
+}
+
+/* The narrow rail has no room for a scrollbar: it pushed the icons off-centre
+   from the logo above them. The menu still scrolls, it just does not show a bar. */
+@media (min-width: 1025px) {
+  .app.sidebar-collapsed .sidebar-nav { scrollbar-width: none; }
+  .app.sidebar-collapsed .sidebar-nav::-webkit-scrollbar { width: 0; display: none; }
+}
+
+
+/* ---------------------------------------------------------- notifications --- */
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.topbar-right .topbar-actions { margin-left: 0; }
+.notif { position: relative; }
+.notif-btn {
+  position: relative;
+  width: var(--tap);
+  height: var(--tap);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--ink-300);
+  background: var(--white);
+  color: var(--ink-800);
+  cursor: pointer;
+}
+.notif-btn:hover { background: var(--ink-100); }
+.notif-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--red-600);
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  border: 2px solid var(--white);
+  box-sizing: content-box;
+}
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 400px;
+  max-width: calc(100vw - 24px);
+  background: var(--white);
+  border: 2px solid var(--ink-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 70;
+  overflow: hidden;
+}
+.notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 2px solid var(--ink-100);
+  font-size: var(--text-md);
+}
+.notif-readall {
+  border: 0;
+  background: none;
+  color: var(--brand-700);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 4px;
+}
+.notif-readall:disabled { color: var(--ink-400); cursor: default; }
+.notif-list { max-height: min(460px, 70vh); overflow-y: auto; }
+.notif-empty { padding: 32px 16px; text-align: center; color: var(--ink-600); display: grid; gap: 8px; justify-items: center; }
+.notif-item {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--ink-100);
+  background: var(--white);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.notif-item:hover { background: var(--ink-50); }
+.notif-item.unread { background: var(--brand-50); }
+.notif-item.unread:hover { background: var(--brand-100); }
+.notif-dot { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--ink-300); }
+.notif-item.unread .notif-dot.info { background: var(--blue-700); }
+.notif-item.unread .notif-dot.success { background: var(--green-700); }
+.notif-item.unread .notif-dot.warn { background: var(--amber-600); }
+.notif-item.unread .notif-dot.danger { background: var(--red-600); }
+.notif-text { display: grid; gap: 2px; min-width: 0; }
+.notif-title { font-size: var(--text-sm); color: var(--ink-900); }
+.notif-item.unread .notif-title { font-weight: 700; }
+.notif-body { font-size: var(--text-sm); color: var(--ink-700); }
+.notif-time { font-size: var(--text-xs); color: var(--ink-600); }
+
+@media (max-width: 1024px) {
+  /* The page buttons drop to their own row; the bell stays beside the title. */
+  .topbar-right { display: contents; }
+  .topbar-right .notif { order: 2; margin-left: auto; }
+  .topbar-right .topbar-actions { order: 3; }
+  .notif-btn { width: 40px; height: 40px; }
+}
+@media (max-width: 760px) {
+  /* A sheet across the screen, not a box hanging off the corner. */
+  .notif { position: static; }
+  .notif-panel { position: fixed; top: 64px; left: 10px; right: 10px; width: auto; max-width: none; }
 }

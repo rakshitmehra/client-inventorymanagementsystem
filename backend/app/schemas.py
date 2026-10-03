@@ -251,6 +251,52 @@ class GoodsReceiptRequest(Schema):
     items: list[DocumentLine] = Field(min_length=1)
 
 
+class ItemPriceLine(Schema):
+    item_id: int
+    # The price of ONE unit of the item (one kg, one piece, one litre).
+    unit_cost: NonNegative
+
+
+class ItemPricesRequest(Schema):
+    prices: list[ItemPriceLine] = Field(min_length=1, max_length=1000)
+
+
+class UsageLine(Schema):
+    item_id: int
+    quantity: Quantity
+    unit_id: int | None = None
+
+
+class UsageRequest(Schema):
+    """What a kitchen got through: any number of items, one save."""
+
+    kitchen_id: int
+    used_at: str | None = None
+    notes: str | None = Field(default=None, max_length=500)
+    items: list[UsageLine] = Field(min_length=1)
+
+
+class PastBillLine(Schema):
+    item_name: str = Field(min_length=1, max_length=160)
+    item_id: int | None = None
+    quantity: Quantity
+    unit: str | None = Field(default=None, max_length=24)
+    unit_price: NonNegative = 0
+    # Left out, it is worked out as quantity x price.
+    line_total: NonNegative | None = None
+
+
+class PastBillRequest(Schema):
+    supplier_name: str = Field(min_length=1, max_length=120)
+    invoice_no: str | None = Field(default=None, max_length=60)
+    bill_date: str = Field(min_length=8, max_length=30)
+    # Left out, it is the sum of the lines. Typed in when the paper bill also
+    # carries tax, delivery or a discount that the lines do not show.
+    total_amount: NonNegative | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+    items: list[PastBillLine] = Field(min_length=1)
+
+
 class TransferRequest(Schema):
     from_location_type: Literal["MAIN", "KITCHEN"]
     from_kitchen_id: int | None = None

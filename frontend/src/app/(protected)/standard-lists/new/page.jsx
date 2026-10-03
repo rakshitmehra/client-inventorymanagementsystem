@@ -40,7 +40,7 @@ function NewStandardList() {
   const toast = useToast();
 
   const { units } = useReference();
-  const itemsQuery = useFetch('/items?page_size=500');
+  const itemsQuery = useFetch('/items?page_size=2000');
   const kitchens = useFetch('/kitchens');
   const suppliers = useFetch('/suppliers');
 

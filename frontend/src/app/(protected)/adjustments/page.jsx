@@ -218,7 +218,7 @@ export default function AdjustmentsPage() {
           }
         />
 
-        <Pagination meta={table.meta} onPage={table.setPage} />
+        <Pagination meta={table.meta} onPage={table.setPage} onPageSize={table.setPageSize} />
       </div>
 
       <AdjustmentForm
@@ -257,9 +257,9 @@ function AdjustmentForm({ open, onClose, onSaved, isAdmin, user, kitchens, toast
 
   const locationPath =
     form.location_type === 'MAIN'
-      ? '/main-inventory?page_size=500'
+      ? '/main-inventory?page_size=2000'
       : form.kitchen_id
-        ? `/kitchens/${form.kitchen_id}/inventory?page_size=500`
+        ? `/kitchens/${form.kitchen_id}/inventory?page_size=2000`
         : null;
   const stock = useFetch(locationPath, { skip: !open || !locationPath });
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request
 from sqlalchemy import func, or_, select
 
 from ..deps import CurrentUserDep, DbSession, load_current_user
-from ..errors import bad_request, unauthorized
+from ..errors import bad_request, forbidden, unauthorized
 from ..models import Role, User
 from ..schemas import ChangePasswordRequest, LoginRequest, dt
 from ..security import create_access_token, hash_password, verify_password
@@ -120,6 +120,12 @@ def me(user: CurrentUserDep):
 def change_password(
     payload: ChangePasswordRequest, request: Request, db: DbSession, user: CurrentUserDep
 ):
+    # A kitchen manager's password is the administrator's to change, from the
+    # People screen, so a password cannot be changed by whoever is holding an
+    # unattended phone or a shared kitchen tablet.
+    if not user.is_admin:
+        raise forbidden("Ask the administrator to change your password")
+
     row = db.get(User, user.id)
     if not verify_password(payload.current_password, row.password_hash):
         raise bad_request(

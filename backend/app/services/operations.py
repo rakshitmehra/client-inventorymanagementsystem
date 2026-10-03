@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..deps import CurrentUser
 from ..errors import InsufficientStockError, bad_request, conflict, not_found
@@ -27,15 +27,19 @@ from ..models import (
     InventoryTransferItem,
     Item,
     Kitchen,
+    KitchenInventory,
     MovementType,
     Product,
     ProductionRecord,
     Recipe,
     RecipeIngredient,
+    StockMovement,
     StockReceipt,
     StockReceiptItem,
     Supplier,
     Unit,
+    UsageRecord,
+    UsageRecordItem,
     WastageRecord,
 )
 from ..security import D, money, q, rate
@@ -49,7 +53,8 @@ from .inventory import (
     get_balance,
     get_item,
 )
-from .numbering import next_number
+from .notifications import admin_ids, manager_ids, notify, queue_low_stock
+from .numbering import next_number, next_numbers
 from .units import convert, to_item_unit
 
 
@@ -360,6 +365,19 @@ def create_transfer(db: Session, payload: Any, user: CurrentUser) -> dict[str, A
             in_movement.created_at = transfer_date
 
     db.flush()
+
+    # Tell the kitchen's managers that stock has arrived for them.
+    if to_type == KITCHEN:
+        notify(
+            db,
+            manager_ids(db, to_kitchen_id),
+            kind="STOCK_RECEIVED",
+            severity="success",
+            title=f"Stock received: {len(lines)} item{'s' if len(lines) != 1 else ''} from {from_label}",
+            body=f"Delivery {transfer_no}",
+            link=f"/transfers/{transfer.id}",
+            skip_user_id=user.id,
+        )
     return {
         "id": transfer.id,
         "transfer_no": transfer_no,
@@ -638,6 +656,199 @@ def record_wastage(db: Session, payload: Any, user: CurrentUser) -> dict[str, An
         "id": record.id,
         "wastage_no": wastage_no,
         "estimated_cost": float(estimated_cost),
+    }
+
+
+# ---------------------------------------------------------------------------
+# 4b. Kitchen usage - "we got through this much of these things"
+# ---------------------------------------------------------------------------
+def record_usage(db: Session, payload: Any, user: CurrentUser) -> dict[str, Any]:
+    """
+    Take a batch of used-up items off a kitchen's shelf in one save.
+
+    Kitchen staff cannot log every spoonful as it goes into a bowl, so they
+    report in bulk - after a few orders, or at the end of the day - and a
+    kitchen can stock three hundred things. Doing the ordinary per-line work
+    for each of them is a handful of round trips per item, which against a
+    remote database is the difference between a save that is instant and one
+    that times out.
+
+    So this reads everything it needs with one query per table, works out the
+    result in memory, then writes in batches: the number of queries stays about
+    the same whether one item is saved or three hundred. The balance rows are
+    locked together in a single statement, so it stays safe against a transfer
+    or another save landing at the same moment.
+
+    It is stored as a consumption movement, the same kind production writes,
+    because that is what it is: stock that left the shelf by being used.
+    Reports that total "used" therefore pick it up with no changes of their own.
+    """
+    data = payload if isinstance(payload, dict) else payload.model_dump()
+    raw_lines = data.get("items") or []
+    if not raw_lines:
+        raise bad_request("Add at least one item")
+
+    kitchen = require_active_kitchen(db, int(data["kitchen_id"]))
+
+    # -- read everything once -------------------------------------------------
+    parsed = [raw if isinstance(raw, dict) else raw.model_dump() for raw in raw_lines]
+    item_ids = sorted({int(line["item_id"]) for line in parsed})
+    items = {
+        item.id: item
+        for item in db.execute(
+            select(Item).options(selectinload(Item.unit)).where(Item.id.in_(item_ids))
+        ).scalars()
+    }
+    missing = [i for i in item_ids if i not in items]
+    if missing:
+        raise not_found(f"Item {missing[0]}")
+
+    # Lock every balance row this save touches in one statement.
+    balances = {
+        row.item_id: row
+        for row in db.execute(
+            select(KitchenInventory)
+            .where(KitchenInventory.kitchen_id == kitchen.id, KitchenInventory.item_id.in_(item_ids))
+            .with_for_update()
+        ).scalars()
+    }
+
+    # -- work out each line, merging an item that was entered twice ----------
+    merged: dict[int, dict[str, Any]] = {}
+    for index, line in enumerate(parsed, start=1):
+        item = items[int(line["item_id"])]
+        if not item.is_active:
+            raise bad_request(f"{item.name} is archived and cannot be used")
+
+        entered = D(line.get("quantity"))
+        if entered <= 0:
+            raise bad_request(f"Line {index} ({item.name}): quantity must be greater than zero")
+
+        base, unit_id = to_item_unit(db, entered, line.get("unit_id"), item)
+        entry = merged.setdefault(
+            item.id, {"item": item, "quantity": Decimal("0"), "base": Decimal("0"), "unit_id": unit_id}
+        )
+        if entry["unit_id"] != unit_id:
+            raise bad_request(f"{item.name} appears more than once with different units")
+        entry["quantity"] += entered
+        entry["base"] += base
+
+    # -- check every line before changing anything ---------------------------
+    shortages = []
+    for item_id, entry in merged.items():
+        have = q(balances[item_id].quantity) if item_id in balances else Decimal("0")
+        need = q(entry["base"])
+        if have + EPSILON < need:
+            item = entry["item"]
+            shortages.append(
+                {
+                    "item_id": item.id,
+                    "item_name": item.name,
+                    "sku": item.sku,
+                    "unit_code": item.unit.code,
+                    "required": float(need),
+                    "available": float(have),
+                    "shortfall": float(q(need - have)),
+                }
+            )
+    if shortages:
+        raise InsufficientStockError(shortages)
+
+    # -- write in batches ------------------------------------------------------
+    usage_no = next_number(db, "USAGE")
+    movement_numbers = iter(next_numbers(db, "MOVEMENT", len(merged)))
+    used_at = _timestamp(data.get("used_at"))
+
+    total_cost = Decimal("0")
+    lines = []
+    for entry in merged.values():
+        item = entry["item"]
+        base = q(entry["base"])
+        # Cost is the price of ONE unit of the item times how many were used,
+        # so it stays right whatever unit the amount was typed in.
+        unit_cost = rate(item.unit_cost)
+        line_cost = money(unit_cost * base)
+        total_cost += line_cost
+        lines.append((item, entry, base, unit_cost, line_cost))
+
+    record = UsageRecord(
+        usage_no=usage_no,
+        kitchen_id=kitchen.id,
+        total_items=len(lines),
+        total_cost=money(total_cost),
+        notes=data.get("notes"),
+        created_by=user.id,
+    )
+    if used_at:
+        record.used_at = used_at
+    db.add(record)
+    db.flush()
+
+    movements = []
+    usage_lines = []
+    for item, entry, base, unit_cost, line_cost in lines:
+        row = balances[item.id]
+        before = q(row.quantity)
+        after = q(before - base)
+        row.quantity = after
+        queue_low_stock(
+            db,
+            item=item,
+            location_type=KITCHEN,
+            kitchen_id=kitchen.id,
+            before=before,
+            after=after,
+            minimum=max(Decimal(row.min_stock_level or 0), Decimal(item.min_stock_level or 0)),
+            unit_code=item.unit.code,
+        )
+
+        movement = StockMovement(
+            movement_no=next(movement_numbers),
+            movement_type=MovementType.PRODUCTION_CONSUMPTION.value,
+            direction=Direction.OUT.value,
+            item_id=item.id,
+            quantity=base,
+            location_type=KITCHEN,
+            kitchen_id=kitchen.id,
+            balance_before=before,
+            balance_after=after,
+            counterparty_type=CounterpartyType.PRODUCTION.value,
+            counterparty_label="Used in the kitchen",
+            reference_type="USAGE",
+            reference_id=record.id,
+            reference_no=usage_no,
+            unit_cost=unit_cost,
+            total_cost=line_cost,
+            notes=data.get("notes"),
+            performed_by=user.id,
+        )
+        if used_at:
+            movement.created_at = used_at
+        movements.append(movement)
+
+        usage_lines.append(
+            UsageRecordItem(
+                usage_id=record.id,
+                item_id=item.id,
+                quantity=q(entry["quantity"]),
+                unit_id=entry["unit_id"],
+                base_quantity=base,
+                balance_after=after,
+                unit_cost=unit_cost,
+                total_cost=line_cost,
+            )
+        )
+
+    db.add_all(movements)
+    db.add_all(usage_lines)
+    db.flush()
+
+    return {
+        "id": record.id,
+        "usage_no": usage_no,
+        "kitchen_name": kitchen.name,
+        "total_items": len(lines),
+        "total_cost": float(money(total_cost)),
     }
 
 

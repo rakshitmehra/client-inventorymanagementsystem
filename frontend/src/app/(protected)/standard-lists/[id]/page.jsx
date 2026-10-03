@@ -42,7 +42,7 @@ export default function StandardListPage() {
   const list = data?.data;
 
   const { units } = useReference();
-  const itemsQuery = useFetch('/items?page_size=500');
+  const itemsQuery = useFetch('/items?page_size=2000');
 
   /** What to send this time, keyed by item id. Starts at the saved amounts. */
   const [amounts, setAmounts] = useState({});

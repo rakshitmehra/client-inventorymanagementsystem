@@ -115,7 +115,7 @@ export const PAGE_SIZE = 20;
  * just capped - which is why anything filtering in the browser must also check
  * the server's reported total and admit when it is holding only part of it.
  */
-export const FETCH_ALL = 500;
+export const FETCH_ALL = 2000;
 
 /**
  * Search, filter, sort and paginate a list that is already in memory.
@@ -137,7 +137,7 @@ export function useClientTable(
     predicate,
     sort,
     order = 'asc',
-    pageSize = PAGE_SIZE,
+    pageSize: initialPageSize = PAGE_SIZE,
     /** The server's own count, when it may exceed the rows we were given. */
     serverTotal,
     /**
@@ -149,6 +149,12 @@ export function useClientTable(
   } = {},
 ) {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState(initialPageSize);
+  // Changing how many rows a page holds puts you back at the start.
+  const setPageSize = useCallback((size) => {
+    setPageSizeState(size);
+    setPage(1);
+  }, []);
 
   const all = useMemo(() => rows ?? [], [rows]);
   const filterKey = JSON.stringify(filters);
@@ -219,6 +225,7 @@ export function useClientTable(
     startIndex: offset + 1,
     page: current,
     setPage,
+    setPageSize,
     meta: {
       page: current,
       page_size: pageSize,

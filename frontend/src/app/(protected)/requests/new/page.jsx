@@ -50,14 +50,11 @@ export default function AskForStockPage() {
     kitchen ? `/kitchens/${kitchen.id}/inventory?page_size=${FETCH_ALL}` : null,
     { skip: !kitchen },
   );
-  const lists = useFetch('/standard-lists');
 
   /** How much of each item to ask for, keyed by item id. */
   const [wanted, setWanted] = useState({});
   const [search, setSearch] = useState('');
   const [only, setOnly] = useState('');
-  /** Which shopping run to show - everyday, weekly, monthly, or all. */
-  const [run, setRun] = useState('');
   const [category, setCategory] = useState('');
   const [neededBy, setNeededBy] = useState('');
   const [notes, setNotes] = useState('');
@@ -66,14 +63,6 @@ export default function AskForStockPage() {
 
   const rows = stock.data?.data ?? [];
 
-  // The three buying lists double as a grouping of the catalogue: which items
-  // belong to the everyday run, which to the weekly order, which to monthly.
-  // The manager cannot run them - they just say which items to show.
-  const runs = (lists.data?.data ?? []).filter((l) => l.purpose === 'REFILL');
-  const itemsInRun = useMemo(() => {
-    const chosen = runs.find((l) => l.frequency === run);
-    return chosen ? new Set((chosen.items ?? []).map((i) => i.item_id)) : null;
-  }, [runs, run]);
 
   const categories = useMemo(
     () => [...new Set(rows.map((r) => r.category_name).filter(Boolean))].sort(),
@@ -84,13 +73,12 @@ export default function AskForStockPage() {
     search,
     searchKeys: ['item_name', 'sku', 'category_name'],
     predicate: (row) => {
-      if (itemsInRun && !itemsInRun.has(row.item_id)) return false;
       if (category && row.category_name !== category) return false;
       if (only === 'SHORT') return row.stock_status !== 'OK';
       if (only === 'ASKED') return Number(wanted[row.item_id] ?? 0) > 0;
       return true;
     },
-    resetKey: [search, only, run, category],
+    resetKey: [search, only, category],
   });
 
   const asking = useMemo(
@@ -106,16 +94,6 @@ export default function AskForStockPage() {
         })),
     [rows, wanted],
   );
-
-  /** Fill the boxes from the kitchen's saved standard list. */
-  function loadUsualOrder(list) {
-    const filled = { ...wanted };
-    for (const line of list.items ?? []) {
-      filled[line.item_id] = String(line.quantity);
-    }
-    setWanted(filled);
-    toast.success(`Filled in ${list.items?.length ?? 0} items from '${list.name}'`);
-  }
 
   async function submit() {
     setSaving(true);
@@ -146,8 +124,6 @@ export default function AskForStockPage() {
     );
   }
 
-  const usual = (lists.data?.data ?? []).filter((l) => l.kitchen_id === kitchen.id);
-
   return (
     <Layout
       title="Ask for Stock"
@@ -161,34 +137,10 @@ export default function AskForStockPage() {
 
       <StockTabs />
 
-      {usual.length > 0 && (
-        <Alert tone="info" title="Your usual order">
-          {usual.map((list) => (
-            <span key={list.id} style={{ marginRight: 12 }}>
-              <button type="button" className="link-button" onClick={() => loadUsualOrder(list)}>
-                Fill in &lsquo;{list.name}&rsquo; ({list.total_items} items)
-              </button>
-            </span>
-          ))}
-        </Alert>
-      )}
-
       <div className="card mb-16">
         <div className="card-head">
           <SearchInput value={search} onChange={setSearch} placeholder="Search your items…" />
           <div className="card-head-actions">
-            {runs.length > 0 && (
-              <Select
-                value={run}
-                onChange={(e) => setRun(e.target.value)}
-                options={[
-                  { value: '', label: 'Any list' },
-                  { value: 'EVERYDAY', label: 'Everyday list' },
-                  { value: 'WEEKLY', label: 'Weekly list' },
-                  { value: 'MONTHLY', label: 'Monthly list' },
-                ]}
-              />
-            )}
             {categories.length > 1 && (
               <Select
                 value={category}
@@ -278,7 +230,7 @@ export default function AskForStockPage() {
                 />
               }
             />
-            <Pagination meta={table.meta} onPage={table.setPage} />
+            <Pagination meta={table.meta} onPage={table.setPage} onPageSize={table.setPageSize} />
           </>
         )}
       </div>

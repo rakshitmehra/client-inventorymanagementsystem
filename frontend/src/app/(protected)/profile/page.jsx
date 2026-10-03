@@ -42,7 +42,7 @@ export default function ProfilePage() {
   if (!user) return null;
 
   return (
-    <Layout title="My Profile" subtitle="Your account details and access">
+    <Layout title="Settings" subtitle="Your account details and password">
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
         <div className="card">
           <div className="card-head">
@@ -122,70 +122,84 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-head">
-            <h3>Change password</h3>
-          </div>
-          <form onSubmit={changePassword}>
-            <div className="card-body">
-              {error && !Object.keys(errors).length && (
-                <div className="mb-16">
-                  <Alert tone="error">{error.message}</Alert>
-                </div>
-              )}
+        {isAdmin ? (
+          <div className="card">
+            <div className="card-head">
+              <h3>Change password</h3>
+            </div>
+            <form onSubmit={changePassword}>
+              <div className="card-body">
+                {error && !Object.keys(errors).length && (
+                  <div className="mb-16">
+                    <Alert tone="error">{error.message}</Alert>
+                  </div>
+                )}
 
-              <Field label="Current password" required error={errors.current_password}>
-                <Input
-                  type="password"
-                  value={form.current_password}
-                  onChange={set('current_password')}
-                  error={errors.current_password}
-                  autoComplete="current-password"
-                />
-              </Field>
+                <Field label="Current password" required error={errors.current_password}>
+                  <Input
+                    type="password"
+                    value={form.current_password}
+                    onChange={set('current_password')}
+                    error={errors.current_password}
+                    autoComplete="current-password"
+                  />
+                </Field>
 
-              <Field
-                label="New password"
-                required
-                error={errors.new_password}
-                hint="At least 8 characters"
-              >
-                <Input
-                  type="password"
-                  value={form.new_password}
-                  onChange={set('new_password')}
+                <Field
+                  label="New password"
+                  required
                   error={errors.new_password}
-                  autoComplete="new-password"
-                />
-              </Field>
+                  hint="At least 8 characters"
+                >
+                  <Input
+                    type="password"
+                    value={form.new_password}
+                    onChange={set('new_password')}
+                    error={errors.new_password}
+                    autoComplete="new-password"
+                  />
+                </Field>
 
-              <Field label="Confirm new password" required error={errors.confirm_password}>
-                <Input
-                  type="password"
-                  value={form.confirm_password}
-                  onChange={set('confirm_password')}
-                  error={errors.confirm_password}
-                  autoComplete="new-password"
-                />
-              </Field>
+                <Field label="Confirm new password" required error={errors.confirm_password}>
+                  <Input
+                    type="password"
+                    value={form.confirm_password}
+                    onChange={set('confirm_password')}
+                    error={errors.confirm_password}
+                    autoComplete="new-password"
+                  />
+                </Field>
 
-              <p className="muted xs">
-                Password changes are recorded in the audit log. You will stay signed in on this
-                device.
-              </p>
+                <p className="muted xs">
+                  Password changes are recorded in the audit log. You will stay signed in on this
+                  device.
+                </p>
+              </div>
+              <div className="card-foot">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  loading={loading}
+                  disabled={!form.current_password || form.new_password.length < 8}
+                >
+                  Update password
+                </Button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="card">
+            <div className="card-head">
+              <h3>Password</h3>
             </div>
-            <div className="card-foot">
-              <Button
-                type="submit"
-                variant="primary"
-                loading={loading}
-                disabled={!form.current_password || form.new_password.length < 8}
-              >
-                Update password
-              </Button>
+            <div className="card-body">
+              <Alert tone="info">
+                Your password is changed by the administrator. If you need a new one, ask them to
+                reset it for you.
+              </Alert>
             </div>
-          </form>
-        </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

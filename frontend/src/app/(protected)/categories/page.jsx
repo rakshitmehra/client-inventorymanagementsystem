@@ -157,7 +157,7 @@ function Categories() {
           }
         />
 
-        <Pagination meta={table.meta} onPage={table.setPage} />
+        <Pagination meta={table.meta} onPage={table.setPage} onPageSize={table.setPageSize} />
       </div>
 
       <CategoryForm

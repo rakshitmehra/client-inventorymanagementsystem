@@ -2,10 +2,9 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { initials } from '@/lib/format';
-import { Button } from './ui';
+import { Button, ConfirmDialog } from './ui';
 import { Icon } from './Icon';
 
 /**
@@ -88,6 +87,7 @@ function navigationFor(user, isAdmin) {
         section: 'History & reports',
         items: [
           { href: '/movements', label: 'Stock History', icon: 'clock' },
+          { href: '/past-bills', label: 'Past Bills', icon: 'documents' },
           { href: '/reports', label: 'Reports', icon: 'chart' },
         ],
       },
@@ -101,6 +101,7 @@ function navigationFor(user, isAdmin) {
           { href: '/suppliers', label: 'Suppliers', icon: 'supplier' },
           { href: '/categories', label: 'Categories', icon: 'tag' },
           { href: '/users', label: 'People', icon: 'users' },
+          { href: '/profile', label: 'Settings', icon: 'user' },
         ],
       },
     ];
@@ -125,6 +126,7 @@ function navigationFor(user, isAdmin) {
     {
       section: 'Record',
       items: [
+        { href: '/use-stock', label: 'Use Stock', icon: 'cooking' },
         { href: '/wastage', label: 'Record Waste', icon: 'trash' },
         { href: '/adjustments', label: 'Correct a Count', icon: 'adjust' },
       ],
@@ -133,6 +135,7 @@ function navigationFor(user, isAdmin) {
       section: 'Look things up',
       items: [
         { href: '/movements', label: 'Stock History', icon: 'clock' },
+        { href: '/profile', label: 'Settings', icon: 'user' },
       ],
     },
   ];
@@ -143,8 +146,8 @@ export default function AppFrame({ children }) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [shut, setShut] = useState({});
+  const [signingOut, setSigningOut] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
 
   // Read the remembered state after mount. Reading it during the first render
   // would make the server's markup and the browser's disagree.
@@ -262,29 +265,29 @@ export default function AppFrame({ children }) {
           </nav>
 
           <div className="sidebar-footer">
-            <div className="sidebar-user">
-              <div className="avatar">{initials(user?.full_name)}</div>
-              <div style={{ minWidth: 0, flex: 1 }} className="sidebar-user-text">
-                <div className="sidebar-user-name">{user?.full_name}</div>
-                <div className="sidebar-user-role">
-                  {isAdmin ? 'Sees every kitchen' : 'Sees one kitchen'}
-                </div>
-              </div>
-            </div>
-
             <div className="sidebar-account">
-              <Button onClick={() => router.push('/profile')} icon="user">
-                My Account
-              </Button>
-              <Button onClick={() => signOut()} icon="logout">
-                Sign Out
-              </Button>
+              <Button
+                onClick={() => setSigningOut(true)}
+                icon="logout"
+                aria-label="Sign out"
+                title="Sign out"
+              />
             </div>
           </div>
         </aside>
 
         <div className="main">{children}</div>
       </div>
+
+      <ConfirmDialog
+        open={signingOut}
+        title="Sign out?"
+        message="You will need to sign in again to use KitchenStock."
+        confirmLabel="Yes, sign out"
+        tone="primary"
+        onConfirm={() => signOut()}
+        onCancel={() => setSigningOut(false)}
+      />
     </AppFrameContext.Provider>
   );
 }

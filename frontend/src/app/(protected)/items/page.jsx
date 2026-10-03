@@ -117,9 +117,14 @@ function Items() {
       title="Items"
       subtitle="The raw materials catalogue shared by the Main Inventory and every kitchen"
       actions={
-        <Button variant="primary" onClick={() => setEditing({})}>
-          Add item
-        </Button>
+        <>
+          <Button onClick={() => router.push('/items/prices')} icon="rupee">
+            Set prices
+          </Button>
+          <Button variant="primary" onClick={() => setEditing({})}>
+            Add item
+          </Button>
+        </>
       }
     >
       {error && <Alert tone="error">{error.message}</Alert>}
@@ -259,10 +264,17 @@ function Items() {
             },
             {
               key: 'unit_cost',
-              label: 'Unit cost',
+              label: 'Price (per 1 unit)',
               align: 'right',
               sortable: true,
-              render: (r) => money(r.unit_cost),
+              render: (r) =>
+                Number(r.unit_cost) > 0 ? (
+                  <span className="nowrap">
+                    {money(r.unit_cost)} <span className="muted small">/ {r.unit_code}</span>
+                  </span>
+                ) : (
+                  <Badge tone="amber">No price</Badge>
+                ),
             },
             {
               key: 'actions',
@@ -307,7 +319,7 @@ function Items() {
           }
         />
 
-        <Pagination meta={table.meta} onPage={table.setPage} />
+        <Pagination meta={table.meta} onPage={table.setPage} onPageSize={table.setPageSize} />
       </div>
 
       <ItemForm
@@ -499,7 +511,11 @@ function ItemForm({ item, units, categories, suppliers, onClose, onSaved, toast 
       </div>
 
       <div className="form-row">
-        <Field label="Unit cost" error={errors.unit_cost} hint="Used to value stock and cost recipes">
+        <Field
+          label={`Price for 1 ${units.find((u) => String(u.id) === String(form.unit_id))?.code ?? 'unit'}`}
+          error={errors.unit_cost}
+          hint="The price of a single unit. Stock value and every cost are worked out from this."
+        >
           <NumberInput value={form.unit_cost ?? 0} min="0" onChange={set('unit_cost')} />
         </Field>
         <Field label="Options">

@@ -70,7 +70,7 @@ function NewGoodsReceipt() {
 
   const suppliers = useFetch('/suppliers');
   const units = useFetch('/units');
-  const items = useFetch('/items?page_size=300');
+  const items = useFetch('/items?page_size=2000');
 
   const itemList = (items.data?.data ?? []).map((i) => ({
     id: i.id,

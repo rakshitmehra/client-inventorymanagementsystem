@@ -171,7 +171,12 @@ export default function MovementsPage() {
               key: 'movement_type',
               label: 'Type',
               render: (r) => {
-                const meta = MOVEMENT_LABELS[r.movement_type];
+                // Stock a kitchen reports as used shares the production
+                // movement type, so say what it is rather than "Production".
+                const meta =
+                  r.reference_type === 'USAGE'
+                    ? { label: 'Used in kitchen', tone: 'amber' }
+                    : MOVEMENT_LABELS[r.movement_type];
                 return <Badge tone={meta?.tone ?? 'gray'}>{meta?.label ?? r.movement_type}</Badge>;
               },
             },
@@ -249,7 +254,7 @@ export default function MovementsPage() {
           }
         />
 
-        <Pagination meta={table.meta} onPage={table.setPage} />
+        <Pagination meta={table.meta} onPage={table.setPage} onPageSize={table.setPageSize} />
       </div>
     </Layout>
   );

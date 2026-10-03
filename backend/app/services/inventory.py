@@ -33,6 +33,7 @@ from ..models import (
     StockMovement,
 )
 from ..security import D, money, q, rate
+from .notifications import queue_low_stock
 from .numbering import next_number
 
 MAIN = LocationType.MAIN.value
@@ -183,6 +184,23 @@ def apply_movement(
 
     row.quantity = after
     db.flush()
+
+    # A balance that drops to or below its minimum is announced (once, when it
+    # crosses) after the transaction commits.
+    if direction == Direction.OUT.value:
+        minimum = item.min_stock_level or Decimal("0")
+        if location_type == KITCHEN:
+            minimum = max(Decimal(row.min_stock_level or 0), Decimal(minimum))
+        queue_low_stock(
+            db,
+            item=item,
+            location_type=location_type,
+            kitchen_id=kitchen_id if location_type == KITCHEN else None,
+            before=before,
+            after=after,
+            minimum=Decimal(minimum),
+            unit_code=item.unit.code,
+        )
 
     cost = rate(unit_cost or 0)
     movement = StockMovement(
